@@ -7,7 +7,10 @@ import { f, pf } from '../utils/constants';
 export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveTrip, onUnarchiveTrip, onDeleteTrip }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const active = trips.filter(t => !t.archived);
-  const archived = trips.filter(t => t.archived);
+  // Newest first (most recent startDate at top)
+  const archived = trips
+    .filter(t => t.archived)
+    .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px 60px' }}>

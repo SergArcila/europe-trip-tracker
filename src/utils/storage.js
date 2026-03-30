@@ -22,6 +22,13 @@ function applyDefaultPatches(stored, defaultTrips) {
   });
 }
 
+function autoArchive(trips) {
+  const today = new Date().toISOString().slice(0, 10);
+  return trips.map(t =>
+    !t.archived && t.endDate && t.endDate < today ? { ...t, archived: true } : t
+  );
+}
+
 export function loadTrips(defaultTrips) {
   try {
     const s = localStorage.getItem(KEY);
@@ -31,11 +38,12 @@ export function loadTrips(defaultTrips) {
       // Add any default trips not yet in storage
       const storedIds = new Set(patched.map(t => t.id));
       const missing = defaultTrips.filter(t => !storedIds.has(t.id));
-      return missing.length > 0 ? [...patched, ...missing] : patched;
+      const all = missing.length > 0 ? [...patched, ...missing] : patched;
+      return autoArchive(all);
     }
-    return defaultTrips;
+    return autoArchive(defaultTrips);
   } catch {
-    return defaultTrips;
+    return autoArchive(defaultTrips);
   }
 }
 
