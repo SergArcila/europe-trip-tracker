@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalIcon, ListIcon, MapIcon, NoteIcon, ChevDown } from './common/Icons';
+import { CalIcon, ListIcon, MapIcon, NoteIcon, ChevDown, EditIcon } from './common/Icons';
 import ChecklistTab from './ChecklistTab';
 import ScheduleTab from './ScheduleTab';
 import MapTab from './MapTab';
@@ -43,6 +43,7 @@ function CityNotes({ city, updateCity }) {
 
 export default function CityPage({ city, updateCity }) {
   const [tab, setTab] = useState('checklist');
+  const [editMode, setEditMode] = useState(false);
   const { t, d } = cityCounts(city);
   const hasSch = city.schedule?.length > 0;
 
@@ -72,7 +73,14 @@ export default function CityPage({ city, updateCity }) {
         ))}
       </div>
 
-      <ProgressBar d={d} t={t} color={city.color} />
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <ProgressBar d={d} t={t} color={city.color} />
+        {tab !== 'map' && (
+          <button onClick={() => setEditMode(!editMode)} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '6px 12px', borderRadius: 8, border: editMode ? `1px solid ${city.color}` : '1px solid var(--border)', background: editMode ? `${city.color}14` : 'transparent', color: editMode ? city.color : 'var(--text-secondary)', fontSize: 12, fontWeight: 600, fontFamily: f, cursor: 'pointer', transition: 'all .15s', flexShrink: 0, marginBottom: 18, marginLeft: 12 }}>
+            <EditIcon /> {editMode ? 'Done' : 'Edit'}
+          </button>
+        )}
+      </div>
 
       {tab !== 'map' && hasSch && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '7px 11px', background: `${city.color}08`, borderRadius: 8, marginBottom: 16, border: `1px solid ${city.color}14` }}>
@@ -81,8 +89,8 @@ export default function CityPage({ city, updateCity }) {
         </div>
       )}
 
-      {tab === 'checklist' && <ChecklistTab city={city} updateCity={updateCity} />}
-      {tab === 'schedule' && <ScheduleTab city={city} updateCity={updateCity} />}
+      {tab === 'checklist' && <ChecklistTab city={city} updateCity={updateCity} editMode={editMode} />}
+      {tab === 'schedule' && <ScheduleTab city={city} updateCity={updateCity} editMode={editMode} />}
       {tab === 'map' && <MapTab city={city} />}
 
       {/* City Notes */}

@@ -1,5 +1,5 @@
 const EUROPE_TRIP = {
-  id: 'europe-2025',
+  id: 'europe-2026',
   name: 'Europe Trip 2026',
   coverEmoji: '🌍',
   startDate: '2026-06-13',

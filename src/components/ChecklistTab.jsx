@@ -7,7 +7,7 @@ import { f } from '../utils/constants';
 
 const EMOJI_PRESETS = ['📌','🎭','🛍️','💊','📸','🎵','🏋️','🧳','🍷','🎯'];
 
-function CatSection({ catKey, cat, color, allItems, filteredItems, onToggleItem, onEditItem, onDeleteItem, onAddItem }) {
+function CatSection({ catKey, cat, color, allItems, filteredItems, onToggleItem, onEditItem, onDeleteItem, onAddItem, editMode }) {
   const [collapsed, setCollapsed] = useState(false);
   const displayItems = filteredItems || allItems;
   const done = allItems.filter(i => i.done).length;
@@ -26,8 +26,8 @@ function CatSection({ catKey, cat, color, allItems, filteredItems, onToggleItem,
             <ItemRow
               key={item.id} item={item} color={color}
               onToggle={() => onToggleItem(item.id)}
-              onEdit={(fields) => onEditItem(item.id, fields)}
-              onDelete={() => onDeleteItem(item.id)}
+              onEdit={editMode ? (fields) => onEditItem(item.id, fields) : null}
+              onDelete={editMode ? () => onDeleteItem(item.id) : null}
             />
           ))}
           {!filteredItems && (
@@ -80,7 +80,7 @@ function AddCategoryBtn({ color, onAdd }) {
   );
 }
 
-export default function ChecklistTab({ city, updateCity }) {
+export default function ChecklistTab({ city, updateCity, editMode }) {
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('all');
   const [pendingOnly, setPendingOnly] = useState(false);
@@ -193,6 +193,7 @@ export default function ChecklistTab({ city, updateCity }) {
             onEditItem={editItem}
             onDeleteItem={deleteItem}
             onAddItem={(item) => addItem(k, item)}
+            editMode={editMode}
           />
         );
       })}

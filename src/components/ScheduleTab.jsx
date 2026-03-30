@@ -63,18 +63,24 @@ function SlotRow({ slot, city, onToggle, onEdit, onDelete }) {
         </div>
       </div>
       {co && <MapButton lat={co.lat} lng={co.lng} color={city.color} />}
-      <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignSelf: 'center' }}>
-        <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 5, borderRadius: 6, display: 'flex', transition: 'all .15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'var(--border)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-          <EditIcon />
-        </button>
-        <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 5, borderRadius: 6, display: 'flex', transition: 'all .15s' }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#E6394618'; e.currentTarget.style.color = '#E63946'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
-          <TrashIcon />
-        </button>
-      </div>
+      {(onEdit || onDelete) && (
+        <div style={{ display: 'flex', gap: 2, flexShrink: 0, alignSelf: 'center' }}>
+          {onEdit && (
+            <button onClick={() => setEditing(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 5, borderRadius: 6, display: 'flex', transition: 'all .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--border)'; e.currentTarget.style.color = 'var(--text-primary)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+              <EditIcon />
+            </button>
+          )}
+          {onDelete && (
+            <button onClick={onDelete} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', padding: 5, borderRadius: 6, display: 'flex', transition: 'all .15s' }}
+              onMouseEnter={e => { e.currentTarget.style.background = '#E6394618'; e.currentTarget.style.color = '#E63946'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'none'; e.currentTarget.style.color = 'var(--text-secondary)'; }}>
+              <TrashIcon />
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -112,7 +118,7 @@ function AddSlotForm({ color, onAdd }) {
   );
 }
 
-export default function ScheduleTab({ city, updateCity }) {
+export default function ScheduleTab({ city, updateCity, editMode }) {
   const toggle = (dayIdx, slotIdx) => {
     updateCity(c => {
       const updated = JSON.parse(JSON.stringify(c));
@@ -179,8 +185,8 @@ export default function ScheduleTab({ city, updateCity }) {
                   slot={s}
                   city={city}
                   onToggle={() => toggle(dI, sI)}
-                  onEdit={(fields) => editSlot(dI, sI, fields)}
-                  onDelete={() => deleteSlot(dI, sI)}
+                  onEdit={editMode ? (fields) => editSlot(dI, sI, fields) : null}
+                  onDelete={editMode ? () => deleteSlot(dI, sI) : null}
                 />
               ))}
               <AddSlotForm color={city.color} onAdd={(slot) => addSlot(dI, slot)} />
