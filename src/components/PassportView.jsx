@@ -40,7 +40,7 @@ function WorldMap({ cities, countries }) {
   const markers = cities.filter(c => c.lat && c.lng);
 
   return (
-    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)', background: '#1a2030' }}>
+    <div style={{ borderRadius: 14, overflow: 'hidden', border: '1px solid var(--border)', background: '#0d1520' }}>
       <ComposableMap projectionConfig={{ scale: 145, center: [10, 10] }} style={{ width: '100%', height: 'auto', display: 'block' }}>
         <Geographies geography={GEO_URL}>
           {({ geographies }) =>
@@ -50,10 +50,11 @@ function WorldMap({ cities, countries }) {
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
-                  fill={visited ? '#457B9D' : '#2a3142'}
-                  stroke="#1a2030"
-                  strokeWidth={0.5}
-                  style={{ default: { outline: 'none' }, hover: { outline: 'none', fill: visited ? '#5a9dbf' : '#343d52' }, pressed: { outline: 'none' } }}
+                  style={{
+                    default: { fill: visited ? '#2563EB' : '#1e2a3a', stroke: '#0d1520', strokeWidth: 0.5, outline: 'none' },
+                    hover:   { fill: visited ? '#3B82F6' : '#263347', stroke: '#0d1520', strokeWidth: 0.5, outline: 'none' },
+                    pressed: { outline: 'none' },
+                  }}
                 />
               );
             })
@@ -61,7 +62,7 @@ function WorldMap({ cities, countries }) {
         </Geographies>
         {markers.map((city, i) => (
           <Marker key={i} coordinates={[city.lng, city.lat]}>
-            <circle r={4} fill={city.color || '#E63946'} stroke="#fff" strokeWidth={1.5} opacity={0.9} />
+            <circle r={5} fill={city.color || '#E63946'} stroke="#fff" strokeWidth={1.5} opacity={0.95} />
           </Marker>
         ))}
       </ComposableMap>
@@ -131,7 +132,7 @@ export default function PassportView({ trips }) {
 
       {/* World Map */}
       <div style={{ marginBottom: 20 }}>
-        <WorldMap cities={stats.cities} />
+        <WorldMap cities={stats.cities} countries={stats.countries} />
       </div>
 
       {/* Stats Grid */}
