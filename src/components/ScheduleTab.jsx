@@ -152,7 +152,7 @@ export default function ScheduleTab({ city, updateCity, editMode }) {
   const addSlot = (dayIdx, slot) => {
     updateCity(c => {
       const updated = JSON.parse(JSON.stringify(c));
-      updated.schedule[dayIdx].slots.push({ id: `slot-${Date.now()}`, ...slot });
+      updated.schedule[dayIdx].slots.push({ id: crypto.randomUUID(), ...slot });
       return updated;
     });
   };

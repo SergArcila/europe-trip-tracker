@@ -4,13 +4,17 @@ import { f, pf, COLOR_PALETTE } from '../utils/constants';
 
 const EMOJI_OPTIONS = ['✈️','🌍','🗺️','🏖️','🏔️','🏛️','🎒','🚂','🚢','🌅','🗼','🌴'];
 
-const emptyCity = () => ({
-  _key: Date.now() + Math.random(),
-  name: '', country: '', flag: '',
-  startDate: '', endDate: '',
-  lat: null, lng: null,
-  color: COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)],
-});
+const emptyCity = () => {
+  const id = crypto.randomUUID();
+  return {
+    _key: id,
+    id,
+    name: '', country: '', flag: '',
+    startDate: '', endDate: '',
+    lat: null, lng: null,
+    color: COLOR_PALETTE[Math.floor(Math.random() * COLOR_PALETTE.length)],
+  };
+};
 
 const toFlag = code => {
   if (!code || code.length !== 2) return '📍';
@@ -195,7 +199,7 @@ export default function TripForm({ existingTrip, onSave, onCancel, onDelete }) {
       const isNew = !existingTrip?.cities?.find(ec => ec.id === c.id);
       if (isNew) {
         return {
-          id: c.id || `city-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          id: c.id || crypto.randomUUID(),
           name: c.name.trim(),
           country: c.country.trim(),
           flag: c.flag || '📍',

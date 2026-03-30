@@ -117,7 +117,7 @@ export default function ChecklistTab({ city, updateCity, editMode }) {
   const addItem = (catKey, { text, note, link }) => {
     updateCity(c => {
       const updated = JSON.parse(JSON.stringify(c));
-      const item = { id: `${c.id}-c-${Date.now()}`, text, note, done: false };
+      const item = { id: crypto.randomUUID(), text, note, done: false };
       if (link) item.link = link;
       updated.categories[catKey].items.push(item);
       return updated;
@@ -127,7 +127,7 @@ export default function ChecklistTab({ city, updateCity, editMode }) {
   const addCategory = ({ icon, label }) => {
     updateCity(c => {
       const updated = JSON.parse(JSON.stringify(c));
-      const key = `custom-${Date.now()}`;
+      const key = `custom-${crypto.randomUUID().slice(0, 8)}`;
       updated.categories[key] = { icon, label, items: [] };
       return updated;
     });

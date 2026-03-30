@@ -1,74 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ChevLeft, ChevRight, EditIcon } from './components/common/Icons';
-import TripList from './components/TripList';
-import TripView from './components/TripView';
-import CityPage from './components/CityPage';
-import TripForm from './components/TripForm';
-import { DEFAULT_TRIPS } from './data/defaultTrips';
-import { loadTrips, saveTrips } from './utils/storage';
-import { f, pf } from './utils/constants';
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import AuthGuard from './components/AuthGuard';
+import Dashboard from './pages/Dashboard';
+import TripDetail from './pages/TripDetail';
+import CityDetail from './pages/CityDetail';
+import NewTrip from './pages/NewTrip';
+import Profile from './pages/Profile';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 
 export default function App() {
-  const [trips, setTrips] = useState(() => loadTrips(DEFAULT_TRIPS));
-  const [view, setView] = useState('list'); // 'list' | 'trip' | 'city' | 'create' | 'edit'
-  const [activeTripId, setActiveTripId] = useState(null);
-  const [activeCityId, setActiveCityId] = useState(null);
-
-  // Persist on every change
-  useEffect(() => { saveTrips(trips); }, [trips]);
-
-  // Scroll to top on view change
-  useEffect(() => { window.scrollTo(0, 0); }, [view, activeCityId]);
-
-  const updateTrip = useCallback((tripId, updater) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? updater(t) : t));
-  }, []);
-
-  const activeTrip = trips.find(t => t.id === activeTripId);
-  const activeCity = activeTrip?.cities.find(c => c.id === activeCityId);
-
-  // City navigation
-  const cityIndex = activeTrip?.cities.findIndex(c => c.id === activeCityId) ?? -1;
-  const prevCity = cityIndex > 0 ? activeTrip.cities[cityIndex - 1] : null;
-  const nextCity = cityIndex < (activeTrip?.cities.length ?? 0) - 1 ? activeTrip.cities[cityIndex + 1] : null;
-
-  const updateCity = useCallback((cityId, tripId, updaterFn) => {
-    setTrips(prev => prev.map(t => t.id === tripId
-      ? { ...t, cities: t.cities.map(c => c.id === cityId ? updaterFn(c) : c) }
-      : t
-    ));
-  }, []);
-
-  const handleSaveTrip = (trip) => {
-    setTrips(prev => {
-      const exists = prev.find(t => t.id === trip.id);
-      return exists ? prev.map(t => t.id === trip.id ? trip : t) : [...prev, trip];
-    });
-    setActiveTripId(trip.id);
-    setView('trip');
-  };
-
-  const handleDeleteTrip = (tripId) => {
-    setTrips(prev => prev.filter(t => t.id !== tripId));
-    setView('list');
-    setActiveTripId(null);
-  };
-
-  const handleArchiveTrip = (tripId) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, archived: true } : t));
-    setView('list');
-    setActiveTripId(null);
-  };
-
-  const handleUnarchiveTrip = (tripId) => {
-    setTrips(prev => prev.map(t => t.id === tripId ? { ...t, archived: false } : t));
-  };
-
-  const goToList = () => { setView('list'); setActiveTripId(null); setActiveCityId(null); };
-  const goToTrip = () => { setView('trip'); setActiveCityId(null); };
-
   return (
-    <>
+    <AuthProvider>
       <style>{`
         :root {
           --bg: #0F1115;
@@ -98,111 +41,23 @@ export default function App() {
         input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(0.5); }
       `}</style>
 
-      <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text-primary)', fontFamily: f }}>
-        {/* Sticky header */}
-        <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg)', borderBottom: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}>
-          <div style={{ maxWidth: 600, margin: '0 auto', padding: '11px 16px', display: 'flex', alignItems: 'center', gap: 9 }}>
+      <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text-primary)' }}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/signup" element={<Signup />} />
 
-            {/* List view header */}
-            {view === 'list' && (
-              <div style={{ fontSize: 14, fontWeight: 700, fontFamily: f, letterSpacing: '.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>Trips</div>
-            )}
+          {/* Protected routes */}
+          <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
+          <Route path="/trips/new" element={<AuthGuard><NewTrip /></AuthGuard>} />
+          <Route path="/trips/:id" element={<AuthGuard><TripDetail /></AuthGuard>} />
+          <Route path="/trips/:id/cities/:cityId" element={<AuthGuard><CityDetail /></AuthGuard>} />
+          <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
 
-            {/* Create/Edit header */}
-            {(view === 'create' || view === 'edit') && (
-              <div style={{ fontSize: 14, fontWeight: 600, fontFamily: f, color: 'var(--text-secondary)' }}>
-                {view === 'create' ? 'New Trip' : 'Edit Trip'}
-              </div>
-            )}
-
-            {/* Trip overview header */}
-            {view === 'trip' && activeTrip && (
-              <>
-                <button onClick={goToList} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '3px 0', fontSize: 12.5, fontFamily: f, gap: 3 }}>
-                  <ChevLeft /> All Trips
-                </button>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {activeTrip.archived ? (
-                    <button onClick={() => handleUnarchiveTrip(activeTripId)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>
-                      Restore
-                    </button>
-                  ) : (
-                    <button onClick={() => handleArchiveTrip(activeTripId)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
-                      Archive
-                    </button>
-                  )}
-                  <button onClick={() => setView('edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f }}>
-                    <EditIcon /> Edit
-                  </button>
-                </div>
-              </>
-            )}
-
-            {/* City view header */}
-            {view === 'city' && activeTrip && activeCity && (
-              <>
-                <button onClick={goToTrip} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '3px 0', fontSize: 12.5, fontFamily: f, gap: 3 }}>
-                  <ChevLeft /> {activeTrip.name}
-                </button>
-                <div style={{ flex: 1 }} />
-                <div style={{ display: 'flex', gap: 3 }}>
-                  {prevCity && (
-                    <button onClick={() => setActiveCityId(prevCity.id)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '3px 9px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f, display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <ChevLeft />{prevCity.name}
-                    </button>
-                  )}
-                  {nextCity && (
-                    <button onClick={() => setActiveCityId(nextCity.id)} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '3px 9px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f, display: 'flex', alignItems: 'center', gap: 2 }}>
-                      {nextCity.name}<ChevRight />
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Views */}
-        {view === 'list' && (
-          <TripList
-            trips={trips}
-            onSelectTrip={id => { setActiveTripId(id); setView('trip'); }}
-            onCreateTrip={() => setView('create')}
-            onArchiveTrip={handleArchiveTrip}
-            onUnarchiveTrip={handleUnarchiveTrip}
-            onDeleteTrip={handleDeleteTrip}
-          />
-        )}
-
-        {view === 'create' && (
-          <TripForm onSave={handleSaveTrip} onCancel={goToList} />
-        )}
-
-        {view === 'edit' && activeTrip && (
-          <TripForm
-            existingTrip={activeTrip}
-            onSave={handleSaveTrip}
-            onCancel={goToTrip}
-            onDelete={handleDeleteTrip}
-          />
-        )}
-
-        {view === 'trip' && activeTrip && (
-          <TripView
-            trip={activeTrip}
-            updateTrip={(updater) => updateTrip(activeTripId, updater)}
-            onSelectCity={cityId => { setActiveCityId(cityId); setView('city'); }}
-          />
-        )}
-
-        {view === 'city' && activeTrip && activeCity && (
-          <CityPage
-            city={activeCity}
-            updateCity={(updaterFn) => updateCity(activeCityId, activeTripId, updaterFn)}
-          />
-        )}
+          {/* Catch-all */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </div>
-    </>
+    </AuthProvider>
   );
 }

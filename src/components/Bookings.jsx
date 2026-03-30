@@ -78,12 +78,12 @@ export default function Bookings({ trip, updateTrip }) {
   const toggleBooking = (id) => updateTrip(t => ({ ...t, bookings: t.bookings.map(b => b.id === id ? { ...b, done: !b.done } : b) }));
   const editBooking = (id, fields) => updateTrip(t => ({ ...t, bookings: t.bookings.map(b => b.id === id ? { ...b, ...fields } : b) }));
   const deleteBooking = (id) => updateTrip(t => ({ ...t, bookings: t.bookings.filter(b => b.id !== id) }));
-  const addBooking = ({ text, note }) => updateTrip(t => ({ ...t, bookings: [...t.bookings, { id: `bk-${Date.now()}`, text, note, done: false }] }));
+  const addBooking = ({ text, note }) => updateTrip(t => ({ ...t, bookings: [...t.bookings, { id: crypto.randomUUID(), text, note, done: false }] }));
 
   const toggleTransport = (id) => updateTrip(t => ({ ...t, transport: t.transport.map(tr => tr.id === id ? { ...tr, done: !tr.done } : tr) }));
   const editTransport = (id, fields) => updateTrip(t => ({ ...t, transport: t.transport.map(tr => tr.id === id ? { ...tr, ...fields } : tr) }));
   const deleteTransport = (id) => updateTrip(t => ({ ...t, transport: t.transport.filter(tr => tr.id !== id) }));
-  const addTransport = ({ text, note }) => updateTrip(t => ({ ...t, transport: [...t.transport, { id: `tr-${Date.now()}`, text, note, done: false }] }));
+  const addTransport = ({ text, note }) => updateTrip(t => ({ ...t, transport: [...t.transport, { id: crypto.randomUUID(), text, note, done: false }] }));
 
   return (
     <>
