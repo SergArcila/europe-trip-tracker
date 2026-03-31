@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import TripList from '../components/TripList';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
+import { useTheme } from '../context/ThemeContext';
 import { deleteTrip, updateTripMeta } from '../lib/api';
+import { SunIcon, MoonIcon } from '../components/common/Icons';
 import { f } from '../utils/constants';
 
 function PersonIcon() {
@@ -19,6 +21,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { tripList, loadTrips, patchTripEntry, removeTripEntry } = useData();
+  const { theme, toggleTheme } = useTheme();
+  const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
 
   // If tripList is already in cache, show it immediately (no spinner)
   const [trips, setTrips] = useState(tripList ?? []);
@@ -87,6 +91,15 @@ export default function Dashboard() {
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--bg)', borderBottom: '1px solid var(--border)', backdropFilter: 'blur(20px)' }}>
         <div style={{ maxWidth: 600, margin: '0 auto', padding: '11px 16px', display: 'flex', alignItems: 'center' }}>
           <div style={{ fontSize: 14, fontWeight: 700, fontFamily: f, letterSpacing: '.05em', color: 'var(--text-secondary)', textTransform: 'uppercase', flex: 1 }}>Trips</div>
+          <button
+            onClick={toggleTheme}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: 7, transition: 'color .15s', marginRight: 2 }}
+            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+            title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {isDark ? <SunIcon /> : <MoonIcon />}
+          </button>
           <button
             onClick={() => navigate('/profile')}
             style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: 7, transition: 'color .15s' }}

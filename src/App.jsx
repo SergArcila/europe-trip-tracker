@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider, useData } from './context/DataContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AuthGuard from './components/AuthGuard';
 import Dashboard from './pages/Dashboard';
 import TripDetail from './pages/TripDetail';
@@ -10,6 +11,7 @@ import NewTrip from './pages/NewTrip';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ShareView from './pages/ShareView';
 
 // Fires prefetchAll in the background whenever a user session starts.
 // Runs inside both providers so it can access both contexts.
@@ -28,6 +30,7 @@ export default function App() {
   return (
     <AuthProvider>
       <DataProvider>
+        <ThemeProvider>
         <Prefetcher />
         <style>{`
           :root {
@@ -40,7 +43,7 @@ export default function App() {
             --border-light: #1F2228;
           }
           @media (prefers-color-scheme: light) {
-            :root {
+            :root:not([data-theme="dark"]) {
               --bg: #FAFAF8;
               --bg-card: #FFFFFF;
               --bg-input: #F5F5F3;
@@ -49,6 +52,24 @@ export default function App() {
               --border: #E8E8E5;
               --border-light: #F0F0ED;
             }
+          }
+          :root[data-theme="light"] {
+            --bg: #FAFAF8;
+            --bg-card: #FFFFFF;
+            --bg-input: #F5F5F3;
+            --text-primary: #1A1A1A;
+            --text-secondary: #777;
+            --border: #E8E8E5;
+            --border-light: #F0F0ED;
+          }
+          :root[data-theme="dark"] {
+            --bg: #0F1115;
+            --bg-card: #1A1D23;
+            --bg-input: #22252B;
+            --text-primary: #F0EDE8;
+            --text-secondary: #8B8A88;
+            --border: #2A2D33;
+            --border-light: #1F2228;
           }
           * { box-sizing: border-box; margin: 0; padding: 0; }
           body { background: var(--bg); }
@@ -63,6 +84,7 @@ export default function App() {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
+            <Route path="/share/:token" element={<ShareView />} />
 
             {/* Protected routes */}
             <Route path="/" element={<AuthGuard><Dashboard /></AuthGuard>} />
@@ -75,6 +97,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
+        </ThemeProvider>
       </DataProvider>
     </AuthProvider>
   );

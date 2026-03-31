@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevRight, ChevDown, NoteIcon } from './common/Icons';
+import { ChevRight, ChevDown, NoteIcon, DownloadIcon } from './common/Icons';
 import Bookings from './Bookings';
 import TripStats from './TripStats';
 import RouteMap from './RouteMap';
@@ -7,6 +7,7 @@ import Checkbox from './common/Checkbox';
 import { cityCounts, pct, tripProgress, formatDateRange, tripDays, findItem, slotDone } from '../utils/tripHelpers';
 import { syncCityDiff } from '../lib/api';
 import { useData } from '../context/DataContext';
+import { downloadICS } from '../utils/icsExport';
 import { f, pf } from '../utils/constants';
 
 function TripJournal({ trip, updateTrip }) {
@@ -27,7 +28,7 @@ function TripJournal({ trip, updateTrip }) {
   );
 }
 
-function TripSchedule({ trip }) {
+function TripSchedule({ trip, onExportICS }) {
   const { getCity, persistCity } = useData();
   const [open, setOpen] = useState(true);
 
@@ -66,6 +67,13 @@ function TripSchedule({ trip }) {
         <span>🗓️ Full Schedule</span>
         <span style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--text-secondary)' }}>{doneSlots}/{totalSlots} done</span>
         <div style={{ flex: 1 }} />
+        <button
+          onClick={(e) => { e.stopPropagation(); onExportICS(citiesWithSchedule); }}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)', fontSize: 11, fontFamily: f, cursor: 'pointer', marginRight: 6, transition: 'all .15s' }}
+          title="Export to calendar (.ics)"
+        >
+          <DownloadIcon /> .ics
+        </button>
         <ChevDown up={!open} />
       </button>
 
@@ -128,6 +136,7 @@ function TripSchedule({ trip }) {
 }
 
 export default function TripView({ trip, updateTrip, onSelectCity }) {
+  const { getCity } = useData();
   const { t: gT, d: gD, pct: gP } = tripProgress(trip);
   const days = tripDays(trip);
   const countries = new Set(trip.cities.map(c => c.country || c.name)).size;
@@ -163,6 +172,7 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
         const { t, d } = cityCounts(city);
         const p = pct(d, t);
         const dateRange = formatDateRange(city.startDate, city.endDate);
+        const cityNotes = getCity(city.id)?.notes;
         return (
           <button key={city.id} onClick={() => onSelectCity(city.id)}
             style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', width: '100%', cursor: 'pointer', marginBottom: 8, textAlign: 'left', transition: 'all .15s' }}
@@ -172,6 +182,7 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f }}>{city.name}</div>
               <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>{dateRange || city.country}</div>
+              {cityNotes && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.75 }}>{cityNotes.length > 72 ? cityNotes.slice(0, 72) + '…' : cityNotes}</div>}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
               <span style={{ fontSize: 12.5, fontWeight: 600, color: city.color, fontFamily: f }}>{p}%</span>
@@ -191,7 +202,7 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
       )}
 
       {/* Full Schedule */}
-      <TripSchedule trip={trip} />
+      <TripSchedule trip={trip} onExportICS={(cities) => downloadICS(trip, cities)} />
 
       {/* Bookings & Transport */}
       <Bookings trip={trip} updateTrip={updateTrip} />

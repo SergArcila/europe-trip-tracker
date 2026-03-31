@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import TripView from '../components/TripView';
 import TripForm from '../components/TripForm';
-import { ChevLeft, EditIcon } from '../components/common/Icons';
-import { getTripById, saveTrip, deleteTrip, updateTripMeta, syncTripDiff } from '../lib/api';
+import { ChevLeft, EditIcon, ShareIcon } from '../components/common/Icons';
+import { getTripById, saveTrip, deleteTrip, updateTripMeta, syncTripDiff, enableTripSharing, disableTripSharing } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
@@ -20,6 +20,8 @@ export default function TripDetail() {
   const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
   const [view, setView] = useState('trip');
+  const [sharing, setSharing] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const tripRef = useRef(cached);
 
@@ -85,6 +87,31 @@ export default function TripDetail() {
     }
   };
 
+  const handleToggleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    try {
+      if (trip.shareToken) {
+        await disableTripSharing(trip.id);
+        setTrip(t => ({ ...t, shareToken: null }));
+        patchTripEntry(trip.id, { shareToken: null });
+      } else {
+        const token = await enableTripSharing(trip.id);
+        setTrip(t => ({ ...t, shareToken: token }));
+        patchTripEntry(trip.id, { shareToken: token });
+      }
+    } catch (e) { console.error(e); }
+    setSharing(false);
+  };
+
+  const handleCopyShareLink = () => {
+    const url = `${window.location.origin}/share/${trip.shareToken}`;
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   const handleArchive = async () => {
     const archived = !trip.archived;
     setTrip(t => ({ ...t, archived }));
@@ -121,6 +148,20 @@ export default function TripDetail() {
               </button>
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                {trip.shareToken ? (
+                  <>
+                    <button onClick={handleCopyShareLink} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: copied ? '#34C759' : 'var(--text-secondary)', fontFamily: f, transition: 'color .2s' }}>
+                      {copied ? 'Copied!' : 'Copy link'}
+                    </button>
+                    <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
+                      Unshare
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f, padding: '3px 4px' }}>
+                    <ShareIcon /> {sharing ? '…' : 'Share'}
+                  </button>
+                )}
                 {trip.archived ? (
                   <button onClick={handleArchive} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>
                     Restore
