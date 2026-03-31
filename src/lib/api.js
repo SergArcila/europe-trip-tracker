@@ -15,6 +15,7 @@ function toTripFormat(row) {
     archived: row.archived,
     tripNotes: row.trip_notes || '',
     crew: row.crew || [],
+    shareToken: row.share_token || null,
     cities: [],
     bookings: [],
     transport: [],
@@ -924,4 +925,81 @@ export async function upsertProfile(userId, data) {
     .from('profiles')
     .upsert({ id: userId, ...data });
   if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Trip Sharing
+// ─────────────────────────────────────────────────────────────
+
+export async function enableTripSharing(tripId) {
+  const token = crypto.randomUUID();
+  const { error } = await supabase
+    .from('trips')
+    .update({ share_token: token })
+    .eq('id', tripId);
+  if (error) throw error;
+  return token;
+}
+
+export async function disableTripSharing(tripId) {
+  const { error } = await supabase
+    .from('trips')
+    .update({ share_token: null })
+    .eq('id', tripId);
+  if (error) throw error;
+}
+
+export async function getSharedTrip(token) {
+  const { data: tripRow, error } = await supabase
+    .from('trips')
+    .select('*')
+    .eq('share_token', token)
+    .single();
+  if (error) throw error;
+
+  const tripId = tripRow.id;
+
+  // Load cities
+  const { data: cities } = await supabase
+    .from('cities')
+    .select('*')
+    .eq('trip_id', tripId)
+    .order('sort_order', { ascending: true });
+
+  const cityIds = (cities || []).map(c => c.id);
+
+  // Load all nested data in parallel
+  const [catRes, itemRes, dayRes, bookingRes, transportRes] = await Promise.all([
+    supabase.from('checklist_categories').select('*').in('city_id', cityIds),
+    supabase.from('checklist_items').select('*').eq('trip_id', tripId),
+    supabase.from('schedule_days').select('*').eq('trip_id', tripId).order('day_number', { ascending: true }),
+    supabase.from('bookings').select('*').eq('trip_id', tripId).eq('is_transport', false).order('sort_order'),
+    supabase.from('bookings').select('*').eq('trip_id', tripId).eq('is_transport', true).order('sort_order'),
+  ]);
+
+  const allDays = dayRes.data || [];
+  const dayIds = allDays.map(d => d.id);
+  let allSlots = [];
+  if (dayIds.length > 0) {
+    const { data: slotData } = await supabase
+      .from('schedule_day_items')
+      .select('*')
+      .in('day_id', dayIds)
+      .order('sort_order', { ascending: true });
+    allSlots = slotData || [];
+  }
+
+  const result = toTripFormat(tripRow);
+  result.cities = (cities || []).map(cityRow => {
+    const cityCats  = (catRes.data || []).filter(c => c.city_id === cityRow.id);
+    const cityItems = (itemRes.data || []).filter(i => i.city_id === cityRow.id);
+    const cityDays  = allDays.filter(d => d.city_id === cityRow.id);
+    const cityDayIds = cityDays.map(d => d.id);
+    const citySlots = allSlots.filter(s => cityDayIds.includes(s.day_id));
+    return toCityFull(cityRow, cityCats, cityItems, cityDays, citySlots);
+  });
+  result.bookings  = (bookingRes.data || []).map(toBookingFormat);
+  result.transport = (transportRes.data || []).map(toTransportFormat);
+
+  return result;
 }
