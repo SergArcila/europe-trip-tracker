@@ -3,7 +3,10 @@ import { ChevRight, ChevDown, NoteIcon } from './common/Icons';
 import Bookings from './Bookings';
 import TripStats from './TripStats';
 import RouteMap from './RouteMap';
-import { cityCounts, pct, tripProgress, formatDateRange, tripDays } from '../utils/tripHelpers';
+import Checkbox from './common/Checkbox';
+import { cityCounts, pct, tripProgress, formatDateRange, tripDays, findItem, slotDone } from '../utils/tripHelpers';
+import { syncCityDiff } from '../lib/api';
+import { useData } from '../context/DataContext';
 import { f, pf } from '../utils/constants';
 
 function TripJournal({ trip, updateTrip }) {
@@ -19,6 +22,106 @@ function TripJournal({ trip, updateTrip }) {
       </button>
       {showNotes && (
         <textarea value={tripNotes} onChange={e => updateNotes(e.target.value)} placeholder="Trip memories, overall notes, things to remember..." style={{ width: '100%', minHeight: 150, padding: 14, marginTop: 6, borderRadius: 13, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-primary)', fontSize: 13, fontFamily: f, outline: 'none', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }} />
+      )}
+    </div>
+  );
+}
+
+function TripSchedule({ trip }) {
+  const { getCity, persistCity } = useData();
+  const [open, setOpen] = useState(true);
+
+  // Collect cities that have full schedule data in cache
+  const citiesWithSchedule = trip.cities
+    .map(lc => getCity(lc.id))
+    .filter(c => c?.schedule?.length > 0);
+
+  if (!citiesWithSchedule.length) return null;
+
+  const totalSlots = citiesWithSchedule.reduce((sum, c) =>
+    sum + c.schedule.reduce((s, d) => s + d.slots.length, 0), 0);
+  const doneSlots = citiesWithSchedule.reduce((sum, c) =>
+    sum + c.schedule.reduce((s, d) => s + d.slots.filter(sl => slotDone(c, sl)).length, 0), 0);
+
+  const toggleSlot = (city, dayIdx, slotIdx) => {
+    const oldCity = city;
+    const newCity = JSON.parse(JSON.stringify(city));
+    const s = newCity.schedule[dayIdx].slots[slotIdx];
+    if (s.ref) {
+      const item = findItem(newCity, s.ref);
+      if (item) item.done = !item.done;
+    } else {
+      s.done = !s.done;
+    }
+    persistCity(newCity);
+    syncCityDiff(oldCity, newCity, trip.id).catch(console.error);
+  };
+
+  return (
+    <div style={{ marginTop: 24 }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: f, fontSize: 14, fontWeight: 600, transition: 'all .15s' }}
+      >
+        <span>🗓️ Full Schedule</span>
+        <span style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--text-secondary)' }}>{doneSlots}/{totalSlots} done</span>
+        <div style={{ flex: 1 }} />
+        <ChevDown up={!open} />
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {citiesWithSchedule.map(city => (
+            <div key={city.id}>
+              {/* City header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 7, background: `${city.color}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{city.flag || '📍'}</div>
+                <span style={{ fontSize: 13, fontWeight: 700, color: city.color, fontFamily: f }}>{city.name}</span>
+                <div style={{ flex: 1, height: 1, background: `${city.color}20`, marginLeft: 4 }} />
+              </div>
+
+              {/* Days */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, paddingLeft: 4 }}>
+                {city.schedule.map((day, dI) => {
+                  const dc = day.slots.filter(s => slotDone(city, s)).length;
+                  const allDone = dc === day.slots.length && day.slots.length > 0;
+                  return (
+                    <div key={dI} style={{ background: 'var(--bg-card)', borderRadius: 11, border: '1px solid var(--border)', overflow: 'hidden' }}>
+                      {/* Day header */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '9px 13px', background: `${city.color}08`, borderBottom: '1px solid var(--border-light)' }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: allDone ? `${city.color}20` : 'var(--bg-input)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px solid ${allDone ? city.color + '40' : 'var(--border)'}`, flexShrink: 0 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: allDone ? city.color : 'var(--text-secondary)', fontFamily: f }}>{dc}/{day.slots.length}</span>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)', fontFamily: f }}>{day.day}</div>
+                          {day.title && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f }}>{day.title}</div>}
+                        </div>
+                        {allDone && <span style={{ fontSize: 16 }}>✅</span>}
+                      </div>
+
+                      {/* Slots */}
+                      <div style={{ padding: '2px 13px' }}>
+                        {day.slots.map((slot, sI) => {
+                          const done = slotDone(city, slot);
+                          return (
+                            <div
+                              key={slot.id ?? sI}
+                              style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 0', borderBottom: sI < day.slots.length - 1 ? '1px solid var(--border-light)' : 'none', opacity: done ? 0.5 : 1, transition: 'opacity .2s' }}
+                            >
+                              <Checkbox on={done} color={city.color} sz={19} onClick={() => toggleSlot(city, dI, sI)} />
+                              <span style={{ fontSize: 10, fontWeight: 700, color: city.color, fontFamily: f, minWidth: 48, textTransform: 'uppercase', letterSpacing: '.04em' }}>{slot.time}</span>
+                              <span style={{ fontSize: 13, color: 'var(--text-primary)', fontFamily: f, textDecoration: done ? 'line-through' : 'none', flex: 1 }}>{slot.text}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -86,6 +189,9 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
           No cities yet. Edit the trip to add cities.
         </div>
       )}
+
+      {/* Full Schedule */}
+      <TripSchedule trip={trip} />
 
       {/* Bookings & Transport */}
       <Bookings trip={trip} updateTrip={updateTrip} />
