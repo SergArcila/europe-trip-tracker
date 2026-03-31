@@ -282,14 +282,17 @@ CREATE POLICY "bookings_delete" ON bookings
 -- ============================================================
 -- Auto-create profile on signup
 -- ============================================================
-CREATE OR REPLACE FUNCTION handle_new_user()
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO profiles (id, name)
-  VALUES (new.id, new.raw_user_meta_data->>'name');
+  INSERT INTO public.profiles (id, name)
+  VALUES (new.id, COALESCE(new.raw_user_meta_data->>'name', new.email))
+  ON CONFLICT (id) DO NOTHING;
   RETURN new;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+ALTER FUNCTION public.handle_new_user() OWNER TO postgres;
 
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
