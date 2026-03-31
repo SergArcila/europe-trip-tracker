@@ -29,18 +29,15 @@ export default function Signup() {
       return;
     }
 
-    // The trigger creates a profile row automatically.
-    // Try to upsert here too in case trigger hasn't fired.
-    if (data?.user) {
-      try {
-        await upsertProfile(data.user.id, { name });
-      } catch {
-        // Ignore — trigger will handle it
-      }
+    if (data?.session) {
+      // Logged in immediately (email confirmation disabled)
+      try { await upsertProfile(data.user.id, { name }); } catch {}
       navigate('/');
+    } else if (data?.user) {
+      // Email confirmation required — user exists but has no session yet
+      setError('Almost there! Check your email and click the confirmation link, then log in.');
     } else {
-      // Email confirmation required
-      setError('Check your email to confirm your account, then log in.');
+      setError('Something went wrong. Please try again.');
     }
 
     setLoading(false);
