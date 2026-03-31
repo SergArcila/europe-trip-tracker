@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import TripList from '../components/TripList';
 import { useAuth } from '../context/AuthContext';
-import { getTrips, deleteTrip, updateTripMeta } from '../lib/api';
+import { useData } from '../context/DataContext';
+import { deleteTrip, updateTripMeta } from '../lib/api';
 import { f } from '../utils/constants';
 
 function PersonIcon() {
@@ -17,42 +18,48 @@ function PersonIcon() {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [trips, setTrips] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { tripList, loadTrips, patchTripEntry, removeTripEntry } = useData();
+
+  // If tripList is already in cache, show it immediately (no spinner)
+  const [trips, setTrips] = useState(tripList ?? []);
+  const [loading, setLoading] = useState(tripList === null);
   const [error, setError] = useState('');
 
-  const loadTrips = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await getTrips(user.id);
-      setTrips(data);
-    } catch (e) {
-      setError('Failed to load trips. Check your connection.');
-      console.error(e);
-    } finally {
+  useEffect(() => {
+    // Sync local state whenever cache updates (e.g. after coming back from TripDetail)
+    if (tripList !== null) {
+      setTrips(tripList);
       setLoading(false);
+      return;
     }
-  }, [user.id]);
-
-  useEffect(() => { loadTrips(); }, [loadTrips]);
+    // Cache miss — fetch from Supabase
+    let cancelled = false;
+    setLoading(true);
+    loadTrips(user.id)
+      .then(data => { if (!cancelled) { setTrips(data); setLoading(false); } })
+      .catch(e => { if (!cancelled) { setError('Failed to load trips. Check your connection.'); setLoading(false); console.error(e); } });
+    return () => { cancelled = true; };
+  }, [tripList]); // re-sync when cache changes (e.g. after new trip or archive from another page)
 
   const handleSelectTrip = (id) => navigate(`/trips/${id}`);
-
   const handleCreateTrip = () => navigate('/trips/new');
 
   const handleArchiveTrip = async (tripId) => {
     setTrips(prev => prev.map(t => t.id === tripId ? { ...t, archived: true } : t));
-    try { await updateTripMeta(tripId, { archived: true }); } catch (e) { console.error(e); loadTrips(); }
+    patchTripEntry(tripId, { archived: true });
+    try { await updateTripMeta(tripId, { archived: true }); } catch (e) { console.error(e); }
   };
 
   const handleUnarchiveTrip = async (tripId) => {
     setTrips(prev => prev.map(t => t.id === tripId ? { ...t, archived: false } : t));
-    try { await updateTripMeta(tripId, { archived: false }); } catch (e) { console.error(e); loadTrips(); }
+    patchTripEntry(tripId, { archived: false });
+    try { await updateTripMeta(tripId, { archived: false }); } catch (e) { console.error(e); }
   };
 
   const handleDeleteTrip = async (tripId) => {
     setTrips(prev => prev.filter(t => t.id !== tripId));
-    try { await deleteTrip(tripId); } catch (e) { console.error(e); loadTrips(); }
+    removeTripEntry(tripId);
+    try { await deleteTrip(tripId); } catch (e) { console.error(e); }
   };
 
   if (loading) {
@@ -67,7 +74,7 @@ export default function Dashboard() {
     return (
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '40px 16px', textAlign: 'center' }}>
         <div style={{ fontSize: 13, color: '#E63946', fontFamily: f, marginBottom: 16 }}>{error}</div>
-        <button onClick={loadTrips} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, fontFamily: f, cursor: 'pointer' }}>
+        <button onClick={() => loadTrips(user.id)} style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid var(--border)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: 13, fontFamily: f, cursor: 'pointer' }}>
           Retry
         </button>
       </div>

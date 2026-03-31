@@ -5,24 +5,35 @@ import TripForm from '../components/TripForm';
 import { ChevLeft, EditIcon } from '../components/common/Icons';
 import { getTripById, saveTrip, deleteTrip, updateTripMeta, syncTripDiff } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
 
 export default function TripDetail() {
   const { id: tripId } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { getTrip, loadTrip, persistTrip, patchTripEntry, removeTripEntry } = useData();
 
-  const [trip, setTrip] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const cached = getTrip(tripId);
+
+  const [trip, setTrip] = useState(cached);
+  const [loading, setLoading] = useState(!cached);
   const [error, setError] = useState('');
-  const [view, setView] = useState('trip'); // 'trip' | 'edit'
+  const [view, setView] = useState('trip');
 
-  const tripRef = useRef(null);
+  const tripRef = useRef(cached);
 
   useEffect(() => {
+    const cached = getTrip(tripId);
+    if (cached) {
+      setTrip(cached);
+      tripRef.current = cached;
+      setLoading(false);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
-    getTripById(tripId)
+    loadTrip(tripId)
       .then(data => {
         if (!cancelled) {
           setTrip(data);
@@ -45,11 +56,11 @@ export default function TripDetail() {
       const oldTrip = prev;
       const newTrip = updaterFn(prev);
       tripRef.current = newTrip;
-      // Fire async sync
+      persistTrip(newTrip);
       syncTripDiff(oldTrip, newTrip).catch(console.error);
       return newTrip;
     });
-  }, []);
+  }, [persistTrip]);
 
   const handleSaveTrip = async (tripData) => {
     try {
@@ -57,6 +68,7 @@ export default function TripDetail() {
       const updated = await getTripById(tripId);
       setTrip(updated);
       tripRef.current = updated;
+      persistTrip(updated);
       setView('trip');
     } catch (e) {
       console.error(e);
@@ -66,6 +78,7 @@ export default function TripDetail() {
   const handleDeleteTrip = async () => {
     try {
       await deleteTrip(tripId);
+      removeTripEntry(tripId);
       navigate('/');
     } catch (e) {
       console.error(e);
@@ -75,6 +88,7 @@ export default function TripDetail() {
   const handleArchive = async () => {
     const archived = !trip.archived;
     setTrip(t => ({ ...t, archived }));
+    patchTripEntry(tripId, { archived });
     try { await updateTripMeta(tripId, { archived }); } catch (e) { console.error(e); }
     if (archived) navigate('/');
   };

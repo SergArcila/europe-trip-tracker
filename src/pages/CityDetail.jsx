@@ -2,35 +2,54 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import CityPage from '../components/CityPage';
 import { ChevLeft, ChevRight } from '../components/common/Icons';
-import { getCityDetail, syncCityDiff, getTripById } from '../lib/api';
+import { syncCityDiff } from '../lib/api';
+import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
 
 export default function CityDetail() {
   const { id: tripId, cityId } = useParams();
   const navigate = useNavigate();
+  const { getCity, loadCity, persistCity, getTrip, loadTrip } = useData();
 
-  const [city, setCity] = useState(null);
-  const [tripCities, setTripCities] = useState([]);
-  const [tripName, setTripName] = useState('');
-  const [loading, setLoading] = useState(true);
+  const cachedCity = getCity(cityId);
+  const cachedTrip = getTrip(tripId);
+  const hasBoth = !!(cachedCity && cachedTrip);
+
+  const [city, setCity] = useState(cachedCity);
+  const [tripCities, setTripCities] = useState(cachedTrip?.cities ?? []);
+  const [tripName, setTripName] = useState(cachedTrip?.name ?? '');
+  const [loading, setLoading] = useState(!hasBoth);
   const [error, setError] = useState('');
 
-  const cityRef = useRef(null);
+  const cityRef = useRef(cachedCity);
 
   useEffect(() => {
+    const currentCachedCity = getCity(cityId);
+    const currentCachedTrip = getTrip(tripId);
+
+    if (currentCachedCity && currentCachedTrip) {
+      setCity(currentCachedCity);
+      cityRef.current = currentCachedCity;
+      setTripCities(currentCachedTrip.cities ?? []);
+      setTripName(currentCachedTrip.name ?? '');
+      setLoading(false);
+      window.scrollTo(0, 0);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
 
-    Promise.all([
-      getCityDetail(cityId),
-      getTripById(tripId),
-    ])
+    const cityPromise = currentCachedCity ? Promise.resolve(currentCachedCity) : loadCity(cityId);
+    const tripPromise = currentCachedTrip ? Promise.resolve(currentCachedTrip) : loadTrip(tripId);
+
+    Promise.all([cityPromise, tripPromise])
       .then(([cityData, tripData]) => {
         if (!cancelled) {
           setCity(cityData);
           cityRef.current = cityData;
-          setTripCities(tripData.cities || []);
-          setTripName(tripData.name || '');
+          setTripCities(tripData.cities ?? []);
+          setTripName(tripData.name ?? '');
           setLoading(false);
           window.scrollTo(0, 0);
         }
@@ -52,11 +71,11 @@ export default function CityDetail() {
       const oldCity = prev;
       const newCity = updaterFn(prev);
       cityRef.current = newCity;
-      // Fire async sync (fire and forget)
+      persistCity(newCity);
       syncCityDiff(oldCity, newCity, tripId).catch(console.error);
       return newCity;
     });
-  }, [tripId]);
+  }, [tripId, persistCity]);
 
   // City navigation
   const cityIndex = tripCities.findIndex(c => c.id === cityId);

@@ -3,12 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { getProfile, updateProfile } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+import { useData } from '../context/DataContext';
 import { ChevLeft } from '../components/common/Icons';
 import { f, pf } from '../utils/constants';
 
 export default function Profile() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { clearCache } = useData();
   const [name, setName] = useState('');
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -38,6 +40,7 @@ export default function Profile() {
   };
 
   const handleLogout = async () => {
+    clearCache();
     await supabase.auth.signOut();
     navigate('/login');
   };
