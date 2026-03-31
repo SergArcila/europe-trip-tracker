@@ -60,22 +60,24 @@ function TripSchedule({ trip, onExportICS }) {
 
   return (
     <div style={{ marginTop: 24 }}>
-      <button
-        onClick={() => setOpen(o => !o)}
-        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '12px 16px', background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: f, fontSize: 14, fontWeight: 600, transition: 'all .15s' }}
-      >
-        <span>🗓️ Full Schedule</span>
-        <span style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--text-secondary)' }}>{doneSlots}/{totalSlots} done</span>
-        <div style={{ flex: 1 }} />
+      <div style={{ display: 'flex', alignItems: 'center', background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', overflow: 'hidden' }}>
+        <div
+          onClick={() => setOpen(o => !o)}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '12px 16px', cursor: 'pointer', color: 'var(--text-primary)', fontFamily: f, fontSize: 14, fontWeight: 600 }}
+        >
+          <span>🗓️ Full Schedule</span>
+          <span style={{ fontSize: 11.5, fontWeight: 400, color: 'var(--text-secondary)' }}>{doneSlots}/{totalSlots} done</span>
+          <div style={{ flex: 1 }} />
+          <ChevDown up={!open} />
+        </div>
         <button
-          onClick={(e) => { e.stopPropagation(); onExportICS(citiesWithSchedule); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 7, border: '1px solid var(--border)', background: 'var(--bg-input)', color: 'var(--text-secondary)', fontSize: 11, fontFamily: f, cursor: 'pointer', marginRight: 6, transition: 'all .15s' }}
+          onClick={() => onExportICS(citiesWithSchedule)}
+          style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 12px', borderLeft: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 11, fontFamily: f, cursor: 'pointer', height: '100%', transition: 'all .15s', flexShrink: 0 }}
           title="Export to calendar (.ics)"
         >
           <DownloadIcon /> .ics
         </button>
-        <ChevDown up={!open} />
-      </button>
+      </div>
 
       {open && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 16 }}>
