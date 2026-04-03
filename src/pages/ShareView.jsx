@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
-import { getSharedTrip } from '../lib/api';
+import { useParams, useNavigate } from 'react-router-dom';
+import { getSharedTrip, joinTrip, isCurrentUserMember } from '../lib/api';
 import { formatDateRange, tripDays, tripProgress, slotDone } from '../utils/tripHelpers';
+import { useAuth } from '../context/AuthContext';
+import RouteMap from '../components/RouteMap';
 import { f, pf } from '../utils/constants';
 
 function ReadOnlySchedule({ trip }) {
@@ -78,15 +80,43 @@ function ReadOnlySchedule({ trip }) {
 
 export default function ShareView() {
   const { token } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [trip, setTrip] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [alreadyMember, setAlreadyMember] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [joined, setJoined] = useState(false);
 
   useEffect(() => {
     getSharedTrip(token)
-      .then(data => { setTrip(data); setLoading(false); })
+      .then(async data => {
+        setTrip(data);
+        setLoading(false);
+        // Check if logged-in user is already a member
+        if (user) {
+          const isMember = await isCurrentUserMember(data.id).catch(() => false);
+          setAlreadyMember(isMember);
+          // Owner check — don't show join button to trip owner
+          if (data.userId === user.id) setAlreadyMember(true);
+        }
+      })
       .catch(() => { setError('Trip not found or this link has expired.'); setLoading(false); });
-  }, [token]);
+  }, [token, user]);
+
+  const handleJoin = async () => {
+    if (!user) { navigate('/login'); return; }
+    setJoining(true);
+    try {
+      await joinTrip(trip.id);
+      setJoined(true);
+      setAlreadyMember(true);
+    } catch (e) {
+      console.error(e);
+    }
+    setJoining(false);
+  };
 
   if (loading) {
     return (
@@ -111,9 +141,40 @@ export default function ShareView() {
 
   return (
     <div style={{ background: 'var(--bg)', minHeight: '100vh', color: 'var(--text-primary)' }}>
-      {/* Shared badge */}
-      <div style={{ textAlign: 'center', padding: '8px', background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
-        <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>✈️ Shared itinerary · read only</span>
+      {/* Shared badge + Join CTA */}
+      <div style={{ textAlign: 'center', padding: '10px 16px', background: 'var(--bg-card)', borderBottom: '1px solid var(--border)' }}>
+        {joined ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12, color: '#34C759', fontFamily: f, fontWeight: 600 }}>✓ You joined this trip!</span>
+            <button
+              onClick={() => navigate(`/trips/${trip.id}`)}
+              style={{ padding: '5px 14px', borderRadius: 8, border: 'none', background: '#34C759', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: f, cursor: 'pointer' }}
+            >
+              Open &amp; Collaborate →
+            </button>
+          </div>
+        ) : alreadyMember ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>✈️ Shared itinerary</span>
+            <button
+              onClick={() => navigate(`/trips/${trip.id}`)}
+              style={{ padding: '5px 14px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text-primary)', fontSize: 12, fontFamily: f, cursor: 'pointer' }}
+            >
+              Open Trip →
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>✈️ Shared itinerary · read only</span>
+            <button
+              onClick={handleJoin}
+              disabled={joining}
+              style={{ padding: '5px 14px', borderRadius: 8, border: 'none', background: 'var(--text-primary)', color: 'var(--bg)', fontSize: 12, fontWeight: 600, fontFamily: f, cursor: 'pointer', opacity: joining ? 0.6 : 1 }}
+            >
+              {joining ? 'Joining…' : '👥 Join & Collaborate'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px 40px' }}>
@@ -137,6 +198,13 @@ export default function ShareView() {
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6, fontFamily: f }}>{gD} of {gT} items</div>
         </div>
+
+        {/* Globe */}
+        {trip.cities.some(c => c.lat && c.lng) && (
+          <div style={{ marginBottom: 16 }}>
+            <RouteMap trip={trip} />
+          </div>
+        )}
 
         {/* Cities */}
         {trip.cities.map(city => {
