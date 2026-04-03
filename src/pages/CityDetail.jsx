@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import CityPage from '../components/CityPage';
 import { ChevLeft, ChevRight } from '../components/common/Icons';
 import { syncCityDiff } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
 
@@ -64,6 +65,39 @@ export default function CityDetail() {
 
     return () => { cancelled = true; };
   }, [tripId, cityId]);
+
+  // Realtime: silently apply checklist_items updates from other collaborators
+  useEffect(() => {
+    const channel = supabase
+      .channel(`collab-city-${cityId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'checklist_items',
+        filter: `city_id=eq.${cityId}`,
+      }, (payload) => {
+        const updated = payload.new;
+        setCity(prev => {
+          if (!prev) return prev;
+          const next = JSON.parse(JSON.stringify(prev));
+          for (const cat of Object.values(next.categories)) {
+            const item = cat.items.find(i => i.id === updated.id);
+            if (item) {
+              item.done = updated.completed;
+              item.text = updated.name;
+              item.note = updated.notes || '';
+              break;
+            }
+          }
+          cityRef.current = next;
+          persistCity(next);
+          return next;
+        });
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [cityId, persistCity]);
 
   const updateCity = useCallback((updaterFn) => {
     setCity(prev => {

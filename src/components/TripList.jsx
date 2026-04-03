@@ -4,13 +4,15 @@ import TripCard from './TripCard';
 import PassportView from './PassportView';
 import { f, pf } from '../utils/constants';
 
-export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveTrip, onUnarchiveTrip, onDeleteTrip }) {
+export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveTrip, onUnarchiveTrip, onDeleteTrip, onLeaveTrip }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
-  const active = trips.filter(t => !t.archived);
+  const ownedActive = trips.filter(t => !t.archived && !t.isCollaborator);
+  const collaborating = trips.filter(t => !t.archived && t.isCollaborator);
   // Newest first (most recent startDate at top)
   const archived = trips
     .filter(t => t.archived)
     .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+  const active = ownedActive; // for empty state check
 
   return (
     <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px 60px' }}>
@@ -20,7 +22,7 @@ export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveT
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>My Trips</h1>
             <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: f, marginTop: 3 }}>
-              {active.length} active{archived.length > 0 ? ` · ${archived.length} past` : ''}
+              {active.length} active{collaborating.length > 0 ? ` · ${collaborating.length} shared` : ''}{archived.length > 0 ? ` · ${archived.length} past` : ''}
             </div>
           </div>
           <button onClick={onCreateTrip} style={{
@@ -51,7 +53,7 @@ export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveT
             />
           ))}
         </div>
-      ) : (
+      ) : collaborating.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 20px' }}>
           <div style={{ fontSize: 48, marginBottom: 16 }}>✈️</div>
           <div style={{ fontSize: 18, fontWeight: 600, fontFamily: pf, color: 'var(--text-primary)', marginBottom: 8 }}>No trips planned</div>
@@ -67,6 +69,28 @@ export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveT
           }}>
             <PlusIcon /> Create your first trip
           </button>
+        </div>
+      ) : null}
+
+      {/* Shared / Collaborating trips */}
+      {collaborating.length > 0 && (
+        <div style={{ marginTop: active.length > 0 ? 32 : 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+            <span style={{ fontSize: 11.5, fontWeight: 600, fontFamily: f, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+              👥 Shared with you
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {collaborating.map(trip => (
+              <TripCard
+                key={trip.id} trip={trip}
+                onClick={() => onSelectTrip(trip.id)}
+                onLeave={() => onLeaveTrip?.(trip.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
 

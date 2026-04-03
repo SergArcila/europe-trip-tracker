@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ChevRight, ChevDown, NoteIcon, DownloadIcon } from './common/Icons';
 import Bookings from './Bookings';
 import TripStats from './TripStats';
 import RouteMap from './RouteMap';
 import Checkbox from './common/Checkbox';
 import { cityCounts, pct, tripProgress, formatDateRange, tripDays, findItem, slotDone } from '../utils/tripHelpers';
-import { syncCityDiff } from '../lib/api';
+import { syncCityDiff, getTripMembers } from '../lib/api';
 import { useData } from '../context/DataContext';
 import { downloadICS } from '../utils/icsExport';
 import { f, pf } from '../utils/constants';
@@ -137,12 +137,70 @@ function TripSchedule({ trip, onExportICS }) {
   );
 }
 
+function MemberAvatar({ member, size = 44 }) {
+  const s = { width: size, height: size, borderRadius: size / 2, flexShrink: 0 };
+  if (member.avatarUrl) {
+    return <img src={member.avatarUrl} alt={member.displayName} style={{ ...s, objectFit: 'cover', border: '2px solid var(--border)' }} />;
+  }
+  const initials = (member.displayName || '?').charAt(0).toUpperCase();
+  return (
+    <div style={{ ...s, background: 'var(--bg-input)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700, color: 'var(--text-secondary)', fontFamily: f }}>
+      {initials}
+    </div>
+  );
+}
+
+function TripMembers({ trip }) {
+  const [liveMembers, setLiveMembers] = useState(null);
+
+  useEffect(() => {
+    getTripMembers(trip.id)
+      .then(setLiveMembers)
+      .catch(() => {});
+  }, [trip.id]);
+
+  const members = liveMembers ?? (trip.members || []);
+  const owner = trip.owner;
+  const everyone = [
+    ...(owner ? [{ ...owner, role: 'owner' }] : []),
+    ...members,
+  ];
+
+  if (everyone.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 32, paddingBottom: 24 }}>
+      <div style={{ width: 40, height: 1, background: 'var(--border)', margin: '0 auto 24px', borderRadius: 1 }} />
+
+      {/* Avatar row */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+        {everyone.map(m => (
+          <div key={m.userId} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <MemberAvatar member={m} size={48} />
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f, letterSpacing: '-0.01em' }}>{m.displayName}</div>
+              <div style={{ fontSize: 10, color: m.role === 'owner' ? '#457B9D' : 'var(--text-secondary)', fontFamily: f, textTransform: 'uppercase', letterSpacing: '.05em', fontWeight: 600 }}>{m.role}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TripView({ trip, updateTrip, onSelectCity }) {
   const { getCity } = useData();
   const { t: gT, d: gD, pct: gP } = tripProgress(trip);
   const days = tripDays(trip);
-  const countries = new Set(trip.cities.map(c => c.country || c.name)).size;
   const dateStr = formatDateRange(trip.startDate, trip.endDate);
+
+  // Unique countries with one flag each
+  const countryMap = new Map();
+  for (const c of trip.cities) {
+    const key = c.country || c.name;
+    if (key && !countryMap.has(key)) countryMap.set(key, c.flag || '📍');
+  }
+  const uniqueCountries = [...countryMap.entries()];
 
   const gradientColors = trip.cities.map(c => c.color).join(',');
 
@@ -151,9 +209,21 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
       {/* Hero */}
       <div style={{ textAlign: 'center', padding: '26px 0 8px' }}>
         <div style={{ fontSize: 40, marginBottom: 5 }}>{trip.coverEmoji || '✈️'}</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 3px', letterSpacing: '-0.02em' }}>{trip.name}</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>{trip.name}</h1>
+        {/* Country flags row */}
+        {uniqueCountries.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginBottom: 6 }}>
+            {uniqueCountries.map(([country, flag]) => (
+              <span key={country} title={country} style={{ fontSize: 20 }}>{flag}</span>
+            ))}
+          </div>
+        )}
         <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: f }}>
-          {dateStr}{days > 0 ? ` · ${trip.cities.length} cities · ${days} days` : ''}
+          {dateStr}
+          {days > 0 ? ` · ${days} days` : ''}
+          {uniqueCountries.length > 0 ? ` · ${uniqueCountries.length} ${uniqueCountries.length === 1 ? 'country' : 'countries'}` : ''}
+          {trip.cities.length > 0 ? ` · ${trip.cities.length} ${trip.cities.length === 1 ? 'city' : 'cities'}` : ''}
+          {gT > 0 ? ` · ${gT} items` : ''}
         </div>
       </div>
 
@@ -168,6 +238,13 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6, fontFamily: f }}>{gD} of {gT} items</div>
       </div>
+
+      {/* Globe Map */}
+      {trip.cities.some(c => c.lat && c.lng) && (
+        <div style={{ marginBottom: 16 }}>
+          <RouteMap trip={trip} />
+        </div>
+      )}
 
       {/* Cities */}
       {trip.cities.map(city => {
@@ -215,32 +292,11 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
         <TripStats trip={trip} />
       </div>
 
-      {/* Route Map */}
-      {trip.cities.some(c => c.lat && c.lng) && (
-        <div style={{ marginTop: 24 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, fontFamily: f, color: 'var(--text-primary)', marginBottom: 10 }}>🗺️ Trip Route</div>
-          <RouteMap trip={trip} />
-        </div>
-      )}
-
       {/* Trip Journal */}
       <TripJournal trip={trip} updateTrip={updateTrip} />
 
-      {/* Crew */}
-      {trip.crew?.length > 0 && (
-        <div style={{ marginTop: 28, textAlign: 'center', paddingBottom: 20 }}>
-          <div style={{ width: 40, height: 1, background: 'var(--border)', margin: '0 auto 16px', borderRadius: 1 }} />
-          <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-secondary)', fontFamily: f, letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: 12 }}>A trip by</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
-            {trip.crew.map((name, i) => (
-              <div key={i} style={{ fontSize: 15, fontWeight: 600, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>{name}</div>
-            ))}
-          </div>
-          <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-secondary)', fontFamily: f }}>
-            {dateStr} · {countries} {countries === 1 ? 'country' : 'countries'} · {trip.cities.length} cities{days > 0 ? ` · ${days} days` : ''}
-          </div>
-        </div>
-      )}
+      {/* Members (owner + collaborators) */}
+      <TripMembers trip={trip} />
     </div>
   );
 }

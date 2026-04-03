@@ -4,21 +4,32 @@ import TripList from '../components/TripList';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
-import { deleteTrip, updateTripMeta } from '../lib/api';
+import { deleteTrip, updateTripMeta, leaveTrip } from '../lib/api';
 import { SunIcon, MoonIcon } from '../components/common/Icons';
 import { f } from '../utils/constants';
 
-function PersonIcon() {
+function ProfileButton({ profile, onClick }) {
+  if (profile?.avatar_url) {
+    return (
+      <button onClick={onClick} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, borderRadius: '50%', display: 'flex', alignItems: 'center' }} title="Profile">
+        <img src={profile.avatar_url} alt="Profile" style={{ width: 26, height: 26, borderRadius: 13, objectFit: 'cover', border: '1.5px solid var(--border)' }} />
+      </button>
+    );
+  }
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-      <circle cx="12" cy="7" r="4"/>
-    </svg>
+    <button onClick={onClick} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: 7, transition: 'color .15s' }}
+      onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
+      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
+      title="Profile">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+      </svg>
+    </button>
   );
 }
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const { tripList, loadTrips, patchTripEntry, removeTripEntry } = useData();
   const { theme, toggleTheme } = useTheme();
@@ -66,6 +77,12 @@ export default function Dashboard() {
     try { await deleteTrip(tripId); } catch (e) { console.error(e); }
   };
 
+  const handleLeaveTrip = async (tripId) => {
+    setTrips(prev => prev.filter(t => t.id !== tripId));
+    removeTripEntry(tripId);
+    try { await leaveTrip(tripId); } catch (e) { console.error(e); }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -100,15 +117,7 @@ export default function Dashboard() {
           >
             {isDark ? <SunIcon /> : <MoonIcon />}
           </button>
-          <button
-            onClick={() => navigate('/profile')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', padding: '4px', borderRadius: 7, transition: 'color .15s' }}
-            onMouseEnter={e => e.currentTarget.style.color = 'var(--text-primary)'}
-            onMouseLeave={e => e.currentTarget.style.color = 'var(--text-secondary)'}
-            title="Profile"
-          >
-            <PersonIcon />
-          </button>
+          <ProfileButton profile={profile} onClick={() => navigate('/profile')} />
         </div>
       </div>
 
@@ -119,6 +128,7 @@ export default function Dashboard() {
         onArchiveTrip={handleArchiveTrip}
         onUnarchiveTrip={handleUnarchiveTrip}
         onDeleteTrip={handleDeleteTrip}
+        onLeaveTrip={handleLeaveTrip}
       />
     </>
   );

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import TripView from '../components/TripView';
 import TripForm from '../components/TripForm';
 import { ChevLeft, EditIcon, ShareIcon } from '../components/common/Icons';
-import { getTripById, saveTrip, deleteTrip, updateTripMeta, syncTripDiff, enableTripSharing, disableTripSharing } from '../lib/api';
+import { getTripById, saveTrip, deleteTrip, updateTripMeta, syncTripDiff, enableTripSharing, disableTripSharing, leaveTrip } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
@@ -120,6 +120,16 @@ export default function TripDetail() {
     if (archived) navigate('/');
   };
 
+  const handleLeave = async () => {
+    try {
+      await leaveTrip(tripId);
+      removeTripEntry(tripId);
+      navigate('/');
+    } catch (e) { console.error(e); }
+  };
+
+  const isOwner = !trip || trip.userId === user.id;
+
   if (loading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
@@ -148,32 +158,44 @@ export default function TripDetail() {
               </button>
               <div style={{ flex: 1 }} />
               <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                {trip.shareToken ? (
+                {isOwner ? (
                   <>
-                    <button onClick={handleCopyShareLink} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: copied ? '#34C759' : 'var(--text-secondary)', fontFamily: f, transition: 'color .2s' }}>
-                      {copied ? 'Copied!' : 'Copy link'}
-                    </button>
-                    <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
-                      Unshare
+                    {trip.shareToken ? (
+                      <>
+                        <button onClick={handleCopyShareLink} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: copied ? '#34C759' : 'var(--text-secondary)', fontFamily: f, transition: 'color .2s' }}>
+                          {copied ? 'Copied!' : 'Copy link'}
+                        </button>
+                        <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
+                          Unshare
+                        </button>
+                      </>
+                    ) : (
+                      <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f, padding: '3px 4px' }}>
+                        <ShareIcon /> {sharing ? '…' : 'Share'}
+                      </button>
+                    )}
+                    {trip.archived ? (
+                      <button onClick={handleArchive} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>
+                        Restore
+                      </button>
+                    ) : (
+                      <button onClick={handleArchive} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
+                        Archive
+                      </button>
+                    )}
+                    <button onClick={() => setView('edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f }}>
+                      <EditIcon /> Edit
                     </button>
                   </>
                 ) : (
-                  <button onClick={handleToggleShare} disabled={sharing} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f, padding: '3px 4px' }}>
-                    <ShareIcon /> {sharing ? '…' : 'Share'}
-                  </button>
+                  /* Collaborator controls */
+                  <>
+                    <span style={{ fontSize: 11, color: '#457B9D', fontFamily: f, fontWeight: 600, background: '#457B9D18', padding: '3px 8px', borderRadius: 7 }}>👥 Collaborating</span>
+                    <button onClick={handleLeave} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
+                      Leave
+                    </button>
+                  </>
                 )}
-                {trip.archived ? (
-                  <button onClick={handleArchive} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>
-                    Restore
-                  </button>
-                ) : (
-                  <button onClick={handleArchive} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', fontSize: 12, fontFamily: f, padding: '3px 4px' }}>
-                    Archive
-                  </button>
-                )}
-                <button onClick={() => setView('edit')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, fontSize: 12.5, fontFamily: f }}>
-                  <EditIcon /> Edit
-                </button>
               </div>
             </>
           )}
@@ -193,7 +215,7 @@ export default function TripDetail() {
         />
       )}
 
-      {view === 'edit' && (
+      {view === 'edit' && isOwner && (
         <TripForm
           existingTrip={trip}
           onSave={handleSaveTrip}

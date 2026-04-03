@@ -5,9 +5,10 @@ import { supabase } from './supabase';
 // ─────────────────────────────────────────────────────────────
 
 // Transform Supabase trip row → component trip format
-function toTripFormat(row) {
+function toTripFormat(row, { isCollaborator = false } = {}) {
   return {
     id: row.id,
+    userId: row.user_id,
     name: row.title,
     coverEmoji: row.emoji,
     startDate: row.start_date,
@@ -16,6 +17,9 @@ function toTripFormat(row) {
     tripNotes: row.trip_notes || '',
     crew: row.crew || [],
     shareToken: row.share_token || null,
+    isCollaborator,
+    owner: null,
+    members: [],
     cities: [],
     bookings: [],
     transport: [],
@@ -175,16 +179,34 @@ function toTransportFormat(row) {
 // ─────────────────────────────────────────────────────────────
 
 export async function getTrips(userId) {
-  const { data: trips, error: tErr } = await supabase
-    .from('trips')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+  // Fetch owned trips + member trip IDs in parallel
+  const [ownedRes, memberRes] = await Promise.all([
+    supabase.from('trips').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
+    supabase.from('trip_members').select('trip_id').eq('user_id', userId),
+  ]);
 
-  if (tErr) throw tErr;
+  if (ownedRes.error) throw ownedRes.error;
+
+  // Load member trips (trips the user joined but doesn't own)
+  const memberTripIds = (memberRes.data || [])
+    .map(r => r.trip_id)
+    .filter(id => !(ownedRes.data || []).find(t => t.id === id));
+
+  let memberTripRows = [];
+  if (memberTripIds.length > 0) {
+    const { data: mTrips } = await supabase
+      .from('trips')
+      .select('*')
+      .in('id', memberTripIds);
+    memberTripRows = mTrips || [];
+  }
+
+  const trips = [...(ownedRes.data || [])];
+  const allTrips = [...trips, ...memberTripRows];
+  const isCollaboratorId = new Set(memberTripRows.map(t => t.id));
 
   // Load cities for all trips (for flags + progress)
-  const tripIds = trips.map(t => t.id);
+  const tripIds = allTrips.map(t => t.id);
   if (tripIds.length === 0) return [];
 
   const { data: allCities, error: cErr } = await supabase
@@ -248,7 +270,30 @@ export async function getTrips(userId) {
     slotsByDay[slot.day_id].push(slot);
   }
 
-  return trips.map(trip => {
+  // Load owner profiles and trip members (for avatar display)
+  const ownerIds = [...new Set(allTrips.map(t => t.user_id))];
+  const [ownerProfilesRes, membersRes] = await Promise.all([
+    supabase.from('profiles').select('id, name, avatar_url').in('id', ownerIds),
+    supabase.from('trip_members').select('trip_id, user_id, role, profiles(name, avatar_url)').in('trip_id', tripIds),
+  ]);
+
+  const ownerById = {};
+  for (const p of ownerProfilesRes.data || []) {
+    ownerById[p.id] = p;
+  }
+
+  const membersByTrip = {};
+  for (const m of membersRes.data || []) {
+    if (!membersByTrip[m.trip_id]) membersByTrip[m.trip_id] = [];
+    membersByTrip[m.trip_id].push({
+      userId: m.user_id,
+      role: m.role,
+      displayName: m.profiles?.name || 'Traveller',
+      avatarUrl: m.profiles?.avatar_url || null,
+    });
+  }
+
+  return allTrips.map(trip => {
     const cities = (cityByTrip[trip.id] || []).map(c => {
       const items = (itemByCity[c.id] || []).map(i => ({ done: i.done }));
 
@@ -269,10 +314,17 @@ export async function getTrips(userId) {
     const bookings = [];
     const transport = [];
 
-    const result = toTripFormat(trip);
+    const ownerProfile = ownerById[trip.user_id];
+    const result = toTripFormat(trip, { isCollaborator: isCollaboratorId.has(trip.id) });
     result.cities = cities;
     result.bookings = bookings;
     result.transport = transport;
+    result.owner = {
+      userId: trip.user_id,
+      displayName: ownerProfile?.name || 'Traveller',
+      avatarUrl: ownerProfile?.avatar_url || null,
+    };
+    result.members = membersByTrip[trip.id] || [];
     return result;
   });
 }
@@ -947,6 +999,76 @@ export async function disableTripSharing(tripId) {
     .update({ share_token: null })
     .eq('id', tripId);
   if (error) throw error;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Trip Collaboration
+// ─────────────────────────────────────────────────────────────
+
+export async function joinTrip(tripId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('trip_members')
+    .insert({ trip_id: tripId, user_id: user.id, role: 'collaborator' });
+  if (error && error.code !== '23505') throw error; // ignore duplicate
+}
+
+export async function leaveTrip(tripId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { error } = await supabase
+    .from('trip_members')
+    .delete()
+    .eq('trip_id', tripId)
+    .eq('user_id', user.id);
+  if (error) throw error;
+}
+
+export async function getTripMembers(tripId) {
+  const { data, error } = await supabase
+    .from('trip_members')
+    .select('user_id, role, joined_at, profiles(name, avatar_url)')
+    .eq('trip_id', tripId)
+    .order('joined_at', { ascending: true });
+  if (error) throw error;
+  return (data || []).map(m => ({
+    userId: m.user_id,
+    role: m.role,
+    joinedAt: m.joined_at,
+    displayName: m.profiles?.name || 'Traveller',
+    avatarUrl: m.profiles?.avatar_url || null,
+  }));
+}
+
+export async function uploadAvatar(userId, file) {
+  const ext = file.name.split('.').pop() || 'jpg';
+  const path = `${userId}.${ext}`;
+  const { error: upErr } = await supabase.storage
+    .from('avatars')
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (upErr) throw upErr;
+  const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+  // Cache-bust so the img element reloads after re-upload
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+  const { error: dbErr } = await supabase
+    .from('profiles')
+    .update({ avatar_url: url })
+    .eq('id', userId);
+  if (dbErr) throw dbErr;
+  return url;
+}
+
+export async function isCurrentUserMember(tripId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { data } = await supabase
+    .from('trip_members')
+    .select('id')
+    .eq('trip_id', tripId)
+    .eq('user_id', user.id)
+    .maybeSingle();
+  return !!data;
 }
 
 export async function getSharedTrip(token) {
