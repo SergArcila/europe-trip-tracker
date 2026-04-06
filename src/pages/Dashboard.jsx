@@ -3,14 +3,14 @@ import { useNavigate } from 'react-router-dom';
 import { ComposableMap, Geographies, Geography, Marker, Graticule, Sphere } from 'react-simple-maps';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
-import { useTheme } from '../context/ThemeContext';
 import { deleteTrip, updateTripMeta, leaveTrip } from '../lib/api';
-import { PlusIcon } from '../components/common/Icons';
+import { PlusIcon, ChevDown } from '../components/common/Icons';
+import TripCard from '../components/TripCard';
+import PassportView from '../components/PassportView';
 import { f, pf } from '../utils/constants';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-// Stable random stars
 const STARS = Array.from({ length: 180 }, (_, i) => ({
   x: ((i * 137.508) % 100),
   y: ((i * 97.3) % 100),
@@ -18,34 +18,17 @@ const STARS = Array.from({ length: 180 }, (_, i) => ({
   o: 0.3 + (i % 7) * 0.1,
 }));
 
-function getTripStatus(trip) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  if (!trip.startDate) return { label: '—', sub: 'DAYS', type: 'upcoming' };
-  const start = new Date(trip.startDate + 'T00:00:00');
-  const end = trip.endDate ? new Date(trip.endDate + 'T00:00:00') : start;
-  if (today < start) {
-    const days = Math.round((start - today) / (86400 * 1000));
-    return { label: String(days), sub: 'DAYS', type: 'upcoming', days };
-  }
-  if (today <= end) return { label: 'NOW', sub: '', type: 'active' };
-  return { label: '✓', sub: 'DONE', type: 'past' };
-}
-
 function SpaceGlobe({ trips }) {
   const [rotation, setRotation] = useState([-10, -30, 0]);
   const [scale, setScale] = useState(220);
   const isDragging = useRef(false);
   const dragStart = useRef(null);
   const mapRef = useRef(null);
-
-  // Auto-rotate slowly when not dragging
   const animRef = useRef(null);
+
   useEffect(() => {
     const tick = () => {
-      if (!isDragging.current) {
-        setRotation(r => [r[0] - 0.04, r[1], r[2]]);
-      }
+      if (!isDragging.current) setRotation(r => [r[0] - 0.04, r[1], r[2]]);
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
@@ -99,7 +82,7 @@ function SpaceGlobe({ trips }) {
       ref={mapRef}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp}
-      style={{ width: '100%', height: '100%', cursor: isDragging.current ? 'grabbing' : 'grab', userSelect: 'none', touchAction: 'none' }}
+      style={{ width: '100%', height: '100%', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
     >
       <ComposableMap
         projection="geoOrthographic"
@@ -121,16 +104,10 @@ function SpaceGlobe({ trips }) {
             <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <filter id="softGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
         </defs>
-
         <Sphere fill="url(#earthGrad)" stroke="#1e3a5f" strokeWidth={0.5} />
         <Sphere fill="url(#atmGrad)" stroke="none" />
         <Graticule stroke="#0d2040" strokeWidth={0.4} />
-
         <Geographies geography={GEO_URL}>
           {({ geographies }) => geographies.map(geo => (
             <Geography key={geo.rsmKey} geography={geo}
@@ -139,7 +116,6 @@ function SpaceGlobe({ trips }) {
             />
           ))}
         </Geographies>
-
         {markers.map((city, i) => (
           <Marker key={i} coordinates={[city.lng, city.lat]}>
             <circle r={14} fill={city.tripColor + '15'} />
@@ -153,126 +129,6 @@ function SpaceGlobe({ trips }) {
   );
 }
 
-function TripRow({ trip, onSelect, onArchive, onUnarchive, onDelete, onLeave }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const status = getTripStatus(trip);
-
-  const countryMap = new Map();
-  for (const c of trip.cities) {
-    const key = c.country || c.name;
-    if (key && !countryMap.has(key)) countryMap.set(key, c.flag || '📍');
-  }
-  const flags = [...countryMap.values()];
-  const accentColor = trip.cities[0]?.color || '#4fc3f7';
-
-  const labelColor = status.type === 'active' ? '#34C759'
-    : status.type === 'past' ? 'rgba(255,255,255,0.25)'
-    : '#fff';
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div
-        onClick={() => onSelect(trip.id)}
-        style={{ display: 'flex', alignItems: 'center', gap: 0, padding: '18px 20px', cursor: 'pointer', transition: 'background .15s' }}
-        onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.04)'}
-        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-      >
-        {/* Accent line */}
-        <div style={{ width: 3, height: 52, borderRadius: 2, background: status.type === 'past' ? 'rgba(255,255,255,0.12)' : accentColor, marginRight: 18, flexShrink: 0, opacity: status.type === 'past' ? 0.4 : 1 }} />
-
-        {/* Countdown */}
-        <div style={{ width: 64, flexShrink: 0, textAlign: 'center', marginRight: 18 }}>
-          <div style={{ fontSize: status.label.length > 3 ? 28 : 40, fontWeight: 800, fontFamily: pf, color: labelColor, lineHeight: 1, letterSpacing: '-0.03em' }}>
-            {status.label}
-          </div>
-          {status.sub && (
-            <div style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.3)', fontFamily: f, letterSpacing: '.12em', marginTop: 2 }}>
-              {status.sub}
-            </div>
-          )}
-        </div>
-
-        {/* Trip info */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, fontFamily: pf, color: status.type === 'past' ? 'rgba(255,255,255,0.4)' : '#fff', marginBottom: 3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.01em' }}>
-            {trip.name}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', fontFamily: f }}>
-              {trip.startDate ? `${trip.startDate.slice(5).replace('-', '/')}` : 'No date'}
-              {trip.endDate ? ` → ${trip.endDate.slice(5).replace('-', '/')}` : ''}
-            </span>
-            {flags.length > 0 && (
-              <span style={{ fontSize: 14, letterSpacing: 1 }}>{flags.slice(0, 6).join('')}</span>
-            )}
-          </div>
-        </div>
-
-        {/* Menu button */}
-        <button
-          onClick={e => { e.stopPropagation(); setMenuOpen(o => !o); setConfirmDelete(false); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.25)', fontSize: 18, padding: '4px 8px', borderRadius: 6, flexShrink: 0 }}
-          onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.6)'}
-          onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.25)'}
-        >···</button>
-      </div>
-
-      {/* Divider */}
-      <div style={{ height: 1, background: 'rgba(255,255,255,0.06)', marginLeft: 20 }} />
-
-      {/* Dropdown */}
-      {menuOpen && (
-        <>
-          <div onClick={() => { setMenuOpen(false); setConfirmDelete(false); }} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
-          <div style={{ position: 'absolute', top: 8, right: 16, zIndex: 20, background: '#1a1a1a', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 14, overflow: 'hidden', boxShadow: '0 12px 40px rgba(0,0,0,0.6)', minWidth: 170 }}>
-            {trip.isCollaborator ? (
-              !confirmDelete ? (
-                <button onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-                  style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontFamily: f, color: '#ff453a' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,69,58,0.1)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                >🚪 Leave Trip</button>
-              ) : (
-                <div style={{ padding: '12px 14px' }}>
-                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontFamily: f, marginBottom: 8 }}>Leave <strong style={{ color: '#fff' }}>{trip.name}</strong>?</div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button onClick={e => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: '7px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontFamily: f, cursor: 'pointer' }}>Cancel</button>
-                    <button onClick={e => { e.stopPropagation(); onLeave?.(); setMenuOpen(false); }} style={{ flex: 1, padding: '7px', borderRadius: 8, border: 'none', background: '#ff453a', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: f, cursor: 'pointer' }}>Leave</button>
-                  </div>
-                </div>
-              )
-            ) : (
-              <>
-                <button onClick={e => { e.stopPropagation(); trip.archived ? onUnarchive?.() : onArchive?.(); setMenuOpen(false); }}
-                  style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontFamily: f, color: '#fff' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.06)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                >{trip.archived ? '↩ Restore' : '📦 Archive'}</button>
-                {!confirmDelete ? (
-                  <button onClick={e => { e.stopPropagation(); setConfirmDelete(true); }}
-                    style={{ display: 'block', width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', fontSize: 13.5, fontFamily: f, color: '#ff453a' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,69,58,0.1)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                  >🗑 Delete</button>
-                ) : (
-                  <div style={{ padding: '12px 14px' }}>
-                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontFamily: f, marginBottom: 8 }}>Delete <strong style={{ color: '#fff' }}>{trip.name}</strong>?</div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button onClick={e => { e.stopPropagation(); setConfirmDelete(false); }} style={{ flex: 1, padding: '7px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)', background: 'transparent', color: 'rgba(255,255,255,0.5)', fontSize: 12, fontFamily: f, cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={e => { e.stopPropagation(); onDelete?.(); setMenuOpen(false); }} style={{ flex: 1, padding: '7px', borderRadius: 8, border: 'none', background: '#ff453a', color: '#fff', fontSize: 12, fontWeight: 600, fontFamily: f, cursor: 'pointer' }}>Delete</button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
@@ -280,6 +136,7 @@ export default function Dashboard() {
 
   const [trips, setTrips] = useState(tripList ?? []);
   const [loading, setLoading] = useState(tripList === null);
+  const [archiveOpen, setArchiveOpen] = useState(false);
 
   useEffect(() => {
     if (tripList !== null) { setTrips(tripList); setLoading(false); return; }
@@ -311,122 +168,160 @@ export default function Dashboard() {
     try { await leaveTrip(id); } catch {}
   };
 
-  const activeTrips = trips.filter(t => !t.archived).sort((a, b) => {
-    const sa = getTripStatus(a), sb = getTripStatus(b);
-    const order = { active: 0, upcoming: 1, past: 2 };
-    if (order[sa.type] !== order[sb.type]) return order[sa.type] - order[sb.type];
-    return (a.startDate || '').localeCompare(b.startDate || '');
-  });
-  const archivedTrips = trips.filter(t => t.archived).sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
-  const [archiveOpen, setArchiveOpen] = useState(false);
+  const ownedActive = trips.filter(t => !t.archived && !t.isCollaborator);
+  const collaborating = trips.filter(t => !t.archived && t.isCollaborator);
+  const archived = trips
+    .filter(t => t.archived)
+    .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
   return (
-    <div style={{ background: '#000', minHeight: '100vh', color: '#fff' }}>
-      {/* Stars background */}
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+    <div style={{ background: '#000', minHeight: '100vh' }}>
+      {/* Stars — only behind globe */}
+      <div style={{ position: 'absolute', inset: 0, height: '58vh', zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         {STARS.map((s, i) => (
           <div key={i} style={{ position: 'absolute', left: `${s.x}%`, top: `${s.y}%`, width: s.r * 2, height: s.r * 2, borderRadius: '50%', background: '#fff', opacity: s.o }} />
         ))}
       </div>
 
       {/* Globe hero */}
-      <div style={{ position: 'relative', zIndex: 1, height: '62vh', minHeight: 320, maxHeight: 520 }}>
+      <div style={{ position: 'relative', zIndex: 1, height: '58vh', minHeight: 300, maxHeight: 500 }}>
         <SpaceGlobe trips={trips} />
-
-        {/* Top bar: overlaid on globe */}
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, padding: '16px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: f, letterSpacing: '.1em', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' }}>
-            {loading ? '…' : `${activeTrips.length} ${activeTrips.length === 1 ? 'Trip' : 'Trips'}`}
-          </div>
-          {/* Profile button */}
-          <button
-            onClick={() => navigate('/profile')}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-            title="Passport & Settings"
-          >
-            {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt="Profile"
-                style={{ width: 36, height: 36, borderRadius: 18, objectFit: 'cover', border: '2px solid rgba(255,255,255,0.25)' }} />
-            ) : (
-              <div style={{ width: 36, height: 36, borderRadius: 18, background: 'rgba(255,255,255,0.12)', border: '2px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
-                👤
-              </div>
-            )}
-          </button>
-        </div>
-
-        {/* Bottom gradient fade into list */}
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 100, background: 'linear-gradient(to bottom, transparent, #000)', pointerEvents: 'none' }} />
+        {/* Bottom gradient fade into content */}
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, transparent, var(--bg))', pointerEvents: 'none' }} />
       </div>
 
-      {/* Trip list */}
-      <div style={{ position: 'relative', zIndex: 2, background: '#000' }}>
-        {/* "My Trips" header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 20px 16px' }}>
-          <h1 style={{ fontSize: 28, fontWeight: 800, fontFamily: pf, color: '#fff', margin: 0, letterSpacing: '-0.02em' }}>
-            My Trips
-          </h1>
-          <button
-            onClick={() => navigate('/trips/new')}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 16px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 22, color: '#fff', fontSize: 13, fontWeight: 600, fontFamily: f, cursor: 'pointer', transition: 'background .15s' }}
-            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.18)'}
-            onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-          >
-            <PlusIcon /> New Trip
-          </button>
+      {/* Content — switches to theme-aware background */}
+      <div style={{ position: 'relative', zIndex: 2, background: 'var(--bg)', paddingBottom: 60 }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px' }}>
+
+          {/* Header: My Trips + avatar + New Trip */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0 20px' }}>
+            <div>
+              <h1 style={{ fontSize: 28, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>My Trips</h1>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: f, marginTop: 3 }}>
+                {loading ? '…' : `${ownedActive.length} active${collaborating.length > 0 ? ` · ${collaborating.length} shared` : ''}${archived.length > 0 ? ` · ${archived.length} past` : ''}`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Profile avatar */}
+              <button
+                onClick={() => navigate('/profile')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, flexShrink: 0 }}
+                title="Passport & Profile"
+              >
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt="Profile"
+                    style={{ width: 36, height: 36, borderRadius: 18, objectFit: 'cover', border: '2px solid var(--border)' }} />
+                ) : (
+                  <div style={{ width: 36, height: 36, borderRadius: 18, background: 'var(--bg-card)', border: '2px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>
+                    👤
+                  </div>
+                )}
+              </button>
+              {/* New Trip */}
+              <button onClick={() => navigate('/trips/new')} style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px',
+                background: 'var(--text-primary)', color: 'var(--bg)',
+                border: 'none', borderRadius: 10,
+                fontSize: 13, fontWeight: 600, fontFamily: f,
+                cursor: 'pointer', transition: 'opacity .15s', flexShrink: 0,
+              }}
+                onMouseEnter={e => e.currentTarget.style.opacity = '0.85'}
+                onMouseLeave={e => e.currentTarget.style.opacity = '1'}
+              >
+                <PlusIcon /> New Trip
+              </button>
+            </div>
+          </div>
+
+          {/* Active trips */}
+          {ownedActive.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {ownedActive.map(trip => (
+                <TripCard
+                  key={trip.id} trip={trip}
+                  onClick={() => navigate(`/trips/${trip.id}`)}
+                  onArchive={() => handleArchive(trip.id)}
+                  onDelete={() => handleDelete(trip.id)}
+                />
+              ))}
+            </div>
+          ) : collaborating.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>✈️</div>
+              <div style={{ fontSize: 18, fontWeight: 600, fontFamily: pf, color: 'var(--text-primary)', marginBottom: 8 }}>No trips planned</div>
+              <div style={{ fontSize: 13.5, color: 'var(--text-secondary)', fontFamily: f, marginBottom: 28, lineHeight: 1.5 }}>
+                Plan your next adventure with a beautiful,<br />interactive itinerary.
+              </div>
+              <button onClick={() => navigate('/trips/new')} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '13px 24px',
+                background: 'var(--text-primary)', color: 'var(--bg)',
+                border: 'none', borderRadius: 12,
+                fontSize: 14, fontWeight: 600, fontFamily: f, cursor: 'pointer',
+              }}>
+                <PlusIcon /> Create your first trip
+              </button>
+            </div>
+          ) : null}
+
+          {/* Shared / Collaborating trips */}
+          {collaborating.length > 0 && (
+            <div style={{ marginTop: ownedActive.length > 0 ? 32 : 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                <span style={{ fontSize: 11.5, fontWeight: 600, fontFamily: f, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  👥 Shared with you
+                </span>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {collaborating.map(trip => (
+                  <TripCard
+                    key={trip.id} trip={trip}
+                    onClick={() => navigate(`/trips/${trip.id}`)}
+                    onLeave={() => handleLeave(trip.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Past Trips / Archive */}
+          {archived.length > 0 && (
+            <div style={{ marginTop: 32 }}>
+              <button onClick={() => setArchiveOpen(o => !o)} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                width: '100%', padding: '8px 0',
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: 'var(--text-secondary)', marginBottom: 12,
+              }}>
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                <span style={{ fontSize: 11.5, fontWeight: 600, fontFamily: f, letterSpacing: '.06em', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                  Past Trips ({archived.length})
+                </span>
+                <ChevDown up={archiveOpen} />
+                <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+              </button>
+              {archiveOpen && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {archived.map(trip => (
+                    <TripCard
+                      key={trip.id} trip={trip} archived
+                      onClick={() => navigate(`/trips/${trip.id}`)}
+                      onUnarchive={() => handleUnarchive(trip.id)}
+                      onDelete={() => handleDelete(trip.id)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Passport section */}
+          <PassportView trips={trips} profile={profile} />
         </div>
-
-        {/* Top divider */}
-        <div style={{ height: 1, background: 'rgba(255,255,255,0.08)', marginBottom: 4 }} />
-
-        {/* Active trips */}
-        {activeTrips.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>✈️</div>
-            <div style={{ fontSize: 18, fontWeight: 700, fontFamily: pf, color: '#fff', marginBottom: 8 }}>No trips yet</div>
-            <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.4)', fontFamily: f, marginBottom: 28, lineHeight: 1.6 }}>Plan your next adventure</div>
-            <button onClick={() => navigate('/trips/new')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '13px 28px', background: '#fff', color: '#000', border: 'none', borderRadius: 24, fontSize: 14, fontWeight: 700, fontFamily: f, cursor: 'pointer' }}>
-              <PlusIcon /> Create a trip
-            </button>
-          </div>
-        )}
-
-        {activeTrips.map(trip => (
-          <TripRow key={trip.id} trip={trip}
-            onSelect={id => navigate(`/trips/${id}`)}
-            onArchive={() => handleArchive(trip.id)}
-            onUnarchive={() => handleUnarchive(trip.id)}
-            onDelete={() => handleDelete(trip.id)}
-            onLeave={() => handleLeave(trip.id)}
-          />
-        ))}
-
-        {/* Past trips */}
-        {archivedTrips.length > 0 && (
-          <div style={{ marginTop: 8 }}>
-            <button onClick={() => setArchiveOpen(o => !o)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '14px 20px', background: 'none', border: 'none', cursor: 'pointer', color: 'rgba(255,255,255,0.3)', fontFamily: f, fontSize: 12, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase' }}
-              onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.55)'}
-              onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.3)'}
-            >
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-              Past Trips ({archivedTrips.length})
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none" style={{ transform: archiveOpen ? 'none' : 'rotate(-90deg)', transition: 'transform .2s' }}>
-                <path d="M3 5L7 9L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-              <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
-            </button>
-            {archiveOpen && archivedTrips.map(trip => (
-              <TripRow key={trip.id} trip={trip}
-                onSelect={id => navigate(`/trips/${id}`)}
-                onUnarchive={() => handleUnarchive(trip.id)}
-                onDelete={() => handleDelete(trip.id)}
-              />
-            ))}
-          </div>
-        )}
-
-        <div style={{ height: 60 }} />
       </div>
     </div>
   );
