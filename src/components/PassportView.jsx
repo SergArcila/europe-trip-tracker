@@ -213,15 +213,30 @@ export default function PassportView({ trips, profile }) {
     }
   });
 
-  const countries = Object.entries(countryMap).map(([name, flag]) => ({ name, flag }));
-
-  // Total unique countries (trips + profile) for world %
-  const allVisitedNames = new Set([
-    ...countries.map(c => c.name),
-    ...(profile?.home_country ? [profile.home_country] : []),
-    ...(profile?.countries_visited || []),
+  // Profile-sourced countries are always 'past' (already visited)
+  const profilePastNames = new Set([
+    ...(profileHomeCountry ? [profileHomeCountry] : []),
+    ...profileVisited,
   ]);
-  const worldTotal = allVisitedNames.size;
+
+  const countries = Object.entries(countryMap).map(([name, flag]) => ({
+    name,
+    flag,
+    // Profile countries are always past; trip countries use date-aware status
+    status: profilePastNames.has(name) ? 'past' : (countryStatus[name] || 'upcoming'),
+  }));
+
+  // Sort: past first, then upcoming
+  countries.sort((a, b) => {
+    if (a.status === b.status) return a.name.localeCompare(b.name);
+    return a.status === 'past' ? -1 : 1;
+  });
+
+  // World % only counts actually visited (past) countries
+  const pastNames = new Set([
+    ...countries.filter(c => c.status === 'past').map(c => c.name),
+  ]);
+  const worldTotal = pastNames.size;
   const worldPct = Math.round((worldTotal / TOTAL_COUNTRIES) * 100);
 
   return (
@@ -290,19 +305,40 @@ export default function PassportView({ trips, profile }) {
         ))}
       </div>
 
-      {/* Countries visited */}
+      {/* Countries */}
       {countries.length > 0 && (
         <div style={{ background: 'var(--bg-card)', borderRadius: 12, padding: '14px 16px', border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 12.5, fontWeight: 600, fontFamily: f, color: 'var(--text-primary)', marginBottom: 10 }}>
-            Countries Visited
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, fontFamily: f, color: 'var(--text-primary)' }}>
+              Countries
+            </div>
+            {countries.some(c => c.status === 'upcoming') && (
+              <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: f }}>
+                🔒 = upcoming
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {countries.map((c, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '6px 10px', background: 'var(--border)', borderRadius: 8, fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>
-                <span style={{ fontSize: 14 }}>{c.flag}</span>
-                <span>{c.name}</span>
-              </div>
-            ))}
+            {countries.map((c, i) => {
+              const visited = c.status === 'past';
+              return (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '6px 10px',
+                  background: visited ? 'var(--border)' : 'transparent',
+                  border: visited ? 'none' : '1px dashed var(--border)',
+                  borderRadius: 8,
+                  fontSize: 11.5, fontFamily: f,
+                  color: visited ? 'var(--text-secondary)' : 'var(--text-secondary)',
+                  opacity: visited ? 1 : 0.45,
+                  transition: 'all .2s',
+                }}>
+                  <span style={{ fontSize: 14, filter: visited ? 'none' : 'grayscale(1)' }}>{c.flag}</span>
+                  <span>{c.name}</span>
+                  {!visited && <span style={{ fontSize: 10, marginLeft: 1 }}>🔒</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
