@@ -8,6 +8,7 @@ import { PlusIcon, ChevDown } from '../components/common/Icons';
 import TripCard from '../components/TripCard';
 import PassportView from '../components/PassportView';
 import { f, pf } from '../utils/constants';
+import { buildVisitedCodes } from '../utils/countries';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
@@ -18,7 +19,8 @@ const STARS = Array.from({ length: 180 }, (_, i) => ({
   o: 0.3 + (i % 7) * 0.1,
 }));
 
-function SpaceGlobe({ trips }) {
+function SpaceGlobe({ trips, profile }) {
+  const visitedCodes = useMemo(() => buildVisitedCodes(trips, profile), [trips, profile]);
   const [rotation, setRotation] = useState([-10, -30, 0]);
   const [scale, setScale] = useState(220);
   const isDragging = useRef(false);
@@ -90,31 +92,40 @@ function SpaceGlobe({ trips }) {
         style={{ width: '100%', height: '100%' }}
       >
         <defs>
-          <radialGradient id="earthGrad" cx="38%" cy="35%" r="60%">
-            <stop offset="0%" stopColor="#1a3a5c" />
-            <stop offset="60%" stopColor="#0d1f35" />
-            <stop offset="100%" stopColor="#050d1a" />
+          <radialGradient id="earthGrad" cx="40%" cy="38%" r="62%">
+            <stop offset="0%" stopColor="#0a1a2e" />
+            <stop offset="55%" stopColor="#050e1c" />
+            <stop offset="100%" stopColor="#010812" />
           </radialGradient>
           <radialGradient id="atmGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="78%" stopColor="transparent" stopOpacity="0" />
-            <stop offset="92%" stopColor="#4a90d9" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="#6ab4ff" stopOpacity="0.15" />
+            <stop offset="80%" stopColor="transparent" stopOpacity="0" />
+            <stop offset="93%" stopColor="#3a7fd4" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#5aa0ff" stopOpacity="0.1" />
           </radialGradient>
           <filter id="cityGlow" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
+          <filter id="visitedGlow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
         </defs>
-        <Sphere fill="url(#earthGrad)" stroke="#1e3a5f" strokeWidth={0.5} />
+        <Sphere fill="url(#earthGrad)" stroke="#0d1f38" strokeWidth={0.4} />
         <Sphere fill="url(#atmGrad)" stroke="none" />
-        <Graticule stroke="#0d2040" strokeWidth={0.4} />
+        <Graticule stroke="#081528" strokeWidth={0.3} />
         <Geographies geography={GEO_URL}>
-          {({ geographies }) => geographies.map(geo => (
-            <Geography key={geo.rsmKey} geography={geo}
-              fill="#0f2238" stroke="#0d1e30" strokeWidth={0.4}
-              style={{ default: { outline: 'none' }, hover: { outline: 'none' }, pressed: { outline: 'none' } }}
-            />
-          ))}
+          {({ geographies }) => geographies.map(geo => {
+            const isVisited = visitedCodes.has(String(geo.id));
+            return (
+              <Geography key={geo.rsmKey} geography={geo}
+                fill={isVisited ? '#1a5c8e' : '#0a1828'}
+                stroke={isVisited ? '#1e6ea8' : '#081420'}
+                strokeWidth={isVisited ? 0.5 : 0.3}
+                style={{ default: { outline: 'none' }, hover: { outline: 'none' }, pressed: { outline: 'none' } }}
+              />
+            );
+          })}
         </Geographies>
         {markers.map((city, i) => (
           <Marker key={i} coordinates={[city.lng, city.lat]}>
@@ -185,7 +196,7 @@ export default function Dashboard() {
 
       {/* Globe hero */}
       <div style={{ position: 'relative', zIndex: 1, height: '58vh', minHeight: 300, maxHeight: 500 }}>
-        <SpaceGlobe trips={trips} />
+        <SpaceGlobe trips={trips} profile={profile} />
         {/* Bottom gradient fade into content */}
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 120, background: 'linear-gradient(to bottom, transparent, var(--bg))', pointerEvents: 'none' }} />
       </div>

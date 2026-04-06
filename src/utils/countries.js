@@ -210,3 +210,49 @@ export function findCountry(name) {
 export function countryFlag(name) {
   return findCountry(name)?.flag || '🏳️';
 }
+
+// ISO numeric codes used by world-atlas TopoJSON (geo.id)
+export const COUNTRY_NUMERIC_CODES = {
+  'Afghanistan':'4','Albania':'8','Algeria':'12','Argentina':'32','Australia':'36',
+  'Austria':'40','Azerbaijan':'31','Bahrain':'48','Bangladesh':'50','Belarus':'112',
+  'Belgium':'56','Bolivia':'68','Bosnia and Herzegovina':'70','Brazil':'76',
+  'Bulgaria':'100','Cambodia':'116','Cameroon':'120','Canada':'124','Chile':'152',
+  'China':'156','Colombia':'170','Costa Rica':'188','Croatia':'191','Cuba':'192',
+  'Czech Republic':'203','Denmark':'208','Dominican Republic':'214','Ecuador':'218',
+  'Egypt':'818','El Salvador':'222','Estonia':'233','Ethiopia':'231','Finland':'246',
+  'France':'250','Georgia':'268','Germany':'276','Ghana':'288','Greece':'300',
+  'Guatemala':'320','Honduras':'340','Hungary':'348','Iceland':'352','India':'356',
+  'Indonesia':'360','Iran':'364','Iraq':'368','Ireland':'372','Israel':'376',
+  'Italy':'380','Jamaica':'388','Japan':'392','Jordan':'400','Kazakhstan':'398',
+  'Kenya':'404','Kosovo':'383','Kuwait':'414','Kyrgyzstan':'417','Laos':'418',
+  'Latvia':'428','Lebanon':'422','Libya':'434','Lithuania':'440','Luxembourg':'442',
+  'Malaysia':'458','Mexico':'484','Monaco':'492','Mongolia':'496','Montenegro':'499',
+  'Morocco':'504','Mozambique':'508','Myanmar':'104','Nepal':'524','Netherlands':'528',
+  'New Zealand':'554','Nicaragua':'558','Nigeria':'566','North Korea':'408',
+  'North Macedonia':'807','Norway':'578','Oman':'512','Pakistan':'586','Panama':'591',
+  'Paraguay':'600','Peru':'604','Philippines':'608','Poland':'616','Portugal':'620',
+  'Qatar':'634','Romania':'642','Russia':'643','Saudi Arabia':'682','Senegal':'686',
+  'Serbia':'688','Singapore':'702','Slovakia':'703','Slovenia':'705',
+  'South Africa':'710','South Korea':'410','Spain':'724','Sri Lanka':'144',
+  'Sweden':'752','Switzerland':'756','Syria':'760','Taiwan':'158','Tajikistan':'762',
+  'Tanzania':'834','Thailand':'764','Tunisia':'788','Turkey':'792','Turkmenistan':'795',
+  'Uganda':'800','Ukraine':'804','United Arab Emirates':'784','United Kingdom':'826',
+  'United States':'840','Uruguay':'858','Uzbekistan':'860','Venezuela':'862',
+  'Vietnam':'704','Yemen':'887','Zimbabwe':'716',
+};
+
+// Build a Set of ISO numeric codes for all countries a user has visited
+// Sources: profile.home_country, profile.countries_visited, trip city countries
+export function buildVisitedCodes(trips = [], profile = null) {
+  const names = new Set([
+    ...(profile?.home_country ? [profile.home_country] : []),
+    ...(profile?.countries_visited || []),
+    ...trips.flatMap(t => t.cities.map(c => c.country || c.name).filter(Boolean)),
+  ]);
+  const codes = new Set();
+  for (const name of names) {
+    const code = COUNTRY_NUMERIC_CODES[name];
+    if (code) codes.add(code);
+  }
+  return codes;
+}

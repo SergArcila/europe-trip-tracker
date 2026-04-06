@@ -1,39 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, Graticule, Sphere } from 'react-simple-maps';
 import { getPassportStats, getAllYears } from '../utils/tripHelpers';
-import { ALL_COUNTRIES, TOTAL_COUNTRIES } from '../utils/countries';
+import { ALL_COUNTRIES, TOTAL_COUNTRIES, COUNTRY_NUMERIC_CODES } from '../utils/countries';
 import { f, pf } from '../utils/constants';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-const COUNTRY_CODES = {
-  'Afghanistan':'4','Albania':'8','Algeria':'12','Argentina':'32','Australia':'36',
-  'Austria':'40','Azerbaijan':'31','Bahrain':'48','Bangladesh':'50','Belarus':'112',
-  'Belgium':'56','Bolivia':'68','Bosnia and Herzegovina':'70','Brazil':'76',
-  'Bulgaria':'100','Cambodia':'116','Cameroon':'120','Canada':'124','Chile':'152',
-  'China':'156','Colombia':'170','Costa Rica':'188','Croatia':'191','Cuba':'192',
-  'Czech Republic':'203','Denmark':'208','Dominican Republic':'214','Ecuador':'218',
-  'Egypt':'818','El Salvador':'222','Estonia':'233','Ethiopia':'231','Finland':'246',
-  'France':'250','Georgia':'268','Germany':'276','Ghana':'288','Greece':'300',
-  'Guatemala':'320','Honduras':'340','Hungary':'348','Iceland':'352','India':'356',
-  'Indonesia':'360','Iran':'364','Iraq':'368','Ireland':'372','Israel':'376',
-  'Italy':'380','Jamaica':'388','Japan':'392','Jordan':'400','Kazakhstan':'398',
-  'Kenya':'404','Kosovo':'383','Kuwait':'414','Kyrgyzstan':'417','Laos':'418',
-  'Latvia':'428','Lebanon':'422','Libya':'434','Lithuania':'440','Luxembourg':'442',
-  'Malaysia':'458','Mexico':'484','Monaco':'492','Mongolia':'496','Montenegro':'499',
-  'Morocco':'504','Mozambique':'508','Myanmar':'104','Nepal':'524','Netherlands':'528',
-  'New Zealand':'554','Nicaragua':'558','Nigeria':'566','North Korea':'408',
-  'North Macedonia':'807','Norway':'578','Oman':'512','Pakistan':'586','Panama':'591',
-  'Paraguay':'600','Peru':'604','Philippines':'608','Poland':'616','Portugal':'620',
-  'Qatar':'634','Romania':'642','Russia':'643','Saudi Arabia':'682','Senegal':'686',
-  'Serbia':'688','Singapore':'702','Slovakia':'703','Slovenia':'705',
-  'South Africa':'710','South Korea':'410','Spain':'724','Sri Lanka':'144',
-  'Sweden':'752','Switzerland':'756','Syria':'760','Taiwan':'158','Tajikistan':'762',
-  'Tanzania':'834','Thailand':'764','Tunisia':'788','Turkey':'792','Turkmenistan':'795',
-  'Uganda':'800','Ukraine':'804','United Arab Emirates':'784','United Kingdom':'826',
-  'United States':'840','Uruguay':'858','Uzbekistan':'860','Venezuela':'862',
-  'Vietnam':'704','Yemen':'887','Zimbabwe':'716',
-};
 
 // Returns 'past' | 'upcoming' | undefined for each country
 function buildCountryStatus(trips, year) {
@@ -64,12 +36,15 @@ function buildCountryStatus(trips, year) {
   return status;
 }
 
-function GlobeMap({ cities, countryStatus }) {
-  const getCode = (name) => COUNTRY_CODES[name];
+function GlobeMap({ cities, countryStatus, profileVisitedCodes }) {
   const codeStatus = {};
   for (const [name, s] of Object.entries(countryStatus)) {
-    const code = getCode(name);
+    const code = COUNTRY_NUMERIC_CODES[name];
     if (code) codeStatus[code] = s;
+  }
+  // Also mark profile countries (home + manually added) as 'past' if not already in trips
+  for (const code of (profileVisitedCodes || [])) {
+    if (!codeStatus[code]) codeStatus[code] = 'past';
   }
   const markers = cities.filter(c => c.lat && c.lng);
 
@@ -152,10 +127,10 @@ function GlobeMap({ cities, countryStatus }) {
       onTouchMove={onTouchMove}
       onTouchEnd={onMouseUp}
       style={{
-        background: '#060d1a',
+        background: '#010812',
         borderRadius: 14,
         overflow: 'hidden',
-        border: '1px solid #1a2744',
+        border: '1px solid #0d1f38',
         position: 'relative',
         cursor: isDragging ? 'grabbing' : 'grab',
         userSelect: 'none',
@@ -172,29 +147,36 @@ function GlobeMap({ cities, countryStatus }) {
             <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
+          <radialGradient id="pEarthGrad" cx="40%" cy="38%" r="62%">
+            <stop offset="0%" stopColor="#0a1a2e" />
+            <stop offset="55%" stopColor="#050e1c" />
+            <stop offset="100%" stopColor="#010812" />
+          </radialGradient>
           <radialGradient id="patm" cx="50%" cy="50%" r="50%">
-            <stop offset="85%" stopColor="#0d1f3c" stopOpacity="0" />
-            <stop offset="100%" stopColor="#2563a8" stopOpacity="0.45" />
+            <stop offset="80%" stopColor="transparent" stopOpacity="0" />
+            <stop offset="93%" stopColor="#3a7fd4" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#5aa0ff" stopOpacity="0.1" />
           </radialGradient>
         </defs>
 
-        <Sphere fill="#0b1929" stroke="#1a2a48" strokeWidth={0.5} />
+        <Sphere fill="url(#pEarthGrad)" stroke="#0d1f38" strokeWidth={0.4} />
         <Sphere fill="url(#patm)" stroke="none" />
-        <Graticule stroke="#11213a" strokeWidth={0.35} />
+        <Graticule stroke="#081528" strokeWidth={0.3} />
 
         <Geographies geography={GEO_URL}>
           {({ geographies }) =>
             geographies.map(geo => {
               const s = codeStatus[String(geo.id)];
-              const fill = s === 'past' ? '#2e86de' : s === 'upcoming' ? '#1a4a7a' : '#1e3252';
-              const stroke = s === 'past' ? '#2a6090' : s === 'upcoming' ? '#1a4070' : '#1e3050';
+              // past = bright visited blue, upcoming = medium planning blue, none = near-black land
+              const fill = s === 'past' ? '#1e6db5' : s === 'upcoming' ? '#1a4a7a' : '#0a1828';
+              const stroke = s === 'past' ? '#2880cc' : s === 'upcoming' ? '#1a4070' : '#081420';
               return (
                 <Geography
                   key={geo.rsmKey}
                   geography={geo}
                   fill={fill}
                   stroke={stroke}
-                  strokeWidth={s ? 0.6 : 0.35}
+                  strokeWidth={s ? 0.6 : 0.3}
                   style={{ default: { outline: 'none' }, hover: { outline: 'none' }, pressed: { outline: 'none' } }}
                 />
               );
@@ -214,7 +196,7 @@ function GlobeMap({ cities, countryStatus }) {
       <div style={{ position: 'absolute', bottom: 10, right: 12, fontSize: 9.5, color: 'rgba(255,255,255,0.25)', fontFamily: f, letterSpacing: '0.04em', pointerEvents: 'none' }}>
         drag to rotate · scroll to zoom
       </div>
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to top, #060d1a, transparent)', pointerEvents: 'none' }} />
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 40, background: 'linear-gradient(to top, #010812, transparent)', pointerEvents: 'none' }} />
     </div>
   );
 }
@@ -226,6 +208,12 @@ export default function PassportView({ trips, profile }) {
   const year = selectedYear === 'ALL-TIME' ? null : selectedYear;
   const stats = getPassportStats(trips, year);
   const countryStatus = buildCountryStatus(trips, year);
+
+  // Profile-added countries (home + manually visited) shown in ALL-TIME view
+  const profileVisitedCodes = !year ? [
+    ...(profile?.home_country ? [COUNTRY_NUMERIC_CODES[profile.home_country]].filter(Boolean) : []),
+    ...(profile?.countries_visited || []).map(n => COUNTRY_NUMERIC_CODES[n]).filter(Boolean),
+  ] : [];
 
   // Merge trip countries with manually-added profile countries
   const countryMap = {};
@@ -311,7 +299,7 @@ export default function PassportView({ trips, profile }) {
 
       {/* Globe */}
       <div style={{ marginBottom: 16 }}>
-        <GlobeMap cities={stats.cities} countryStatus={countryStatus} />
+        <GlobeMap cities={stats.cities} countryStatus={countryStatus} profileVisitedCodes={profileVisitedCodes} />
       </div>
 
       {/* Stats Grid */}
