@@ -107,6 +107,42 @@ export const getPassportStats = (trips, year = null) => {
   };
 };
 
+// Returns 'past' | 'upcoming' for each country name, based on trip dates
+export const buildCountryStatus = (trips, year = null) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const status = {};
+  const filtered = year ? trips.filter(t => t.startDate?.startsWith(year)) : trips;
+  filtered.forEach(trip => {
+    trip.cities.forEach(city => {
+      const key = city.country || city.name;
+      if (!key) return;
+      const start = city.startDate ? new Date(city.startDate + 'T00:00:00') : null;
+      const end = city.endDate ? new Date(city.endDate + 'T00:00:00') : null;
+      let s;
+      if (!start && !end) { s = 'upcoming'; }
+      else if (end && end < today) { s = 'past'; }
+      else if (start && start <= today) { s = 'past'; }
+      else { s = 'upcoming'; }
+      if (!status[key] || s === 'past') status[key] = s;
+    });
+  });
+  return status;
+};
+
+// Returns status for a single trip: upcoming / active / past
+export const getTripStatus = (trip) => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  if (!trip.startDate) return { label: '—', type: 'upcoming', days: null };
+  const start = new Date(trip.startDate + 'T00:00:00');
+  const end = trip.endDate ? new Date(trip.endDate + 'T00:00:00') : start;
+  if (today < start) {
+    const days = Math.round((start - today) / (86400 * 1000));
+    return { label: days === 1 ? '1 day' : `${days} days`, type: 'upcoming', days };
+  }
+  if (today <= end) return { label: 'Now', type: 'active', days: 0 };
+  return { label: 'Done', type: 'past', days: null };
+};
+
 export const getAllYears = (trips) => {
   const years = new Set();
   trips.forEach(t => {
