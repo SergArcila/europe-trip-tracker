@@ -18,9 +18,9 @@ function SpaceGlobe({ trips, profile }) {
   // Build date-aware code → status map (past / upcoming), plus profile countries as 'past'
   const codeStatus = useMemo(() => {
     const countryStatus = buildCountryStatus(trips); // { countryName → 'past'|'upcoming' }
-    // Add profile home + manually visited as 'past'
-    if (profile?.home_country && !countryStatus[profile.home_country]) {
-      countryStatus[profile.home_country] = 'past';
+    // Home country always shown as 'home' (green), manually visited as 'past'
+    if (profile?.home_country) {
+      countryStatus[profile.home_country] = 'home';
     }
     (profile?.countries_visited || []).forEach(n => {
       if (!countryStatus[n]) countryStatus[n] = 'past';
@@ -91,9 +91,14 @@ function SpaceGlobe({ trips, profile }) {
     setRotation([lon - dx * sens, Math.max(-90, Math.min(90, lat + dy * sens)), 0]);
   }, [scale]);
 
-  const markers = useMemo(() =>
-    trips.flatMap(t => t.cities.filter(c => c.lat && c.lng).map(c => ({ ...c, tripColor: c.color || '#4fc3f7' }))),
-  [trips]);
+  const markers = useMemo(() => [
+    // Trip cities
+    ...trips.flatMap(t => t.cities.filter(c => c.lat && c.lng).map(c => ({ ...c, tripColor: c.color || '#4fc3f7' }))),
+    // Profile home city (green)
+    ...(profile?.home_city?.lat ? [{ ...profile.home_city, tripColor: '#22c55e' }] : []),
+    // Profile manually-added cities (light blue)
+    ...(profile?.profile_cities || []).filter(c => c.lat && c.lng).map(c => ({ ...c, tripColor: '#4fc3f7' })),
+  ], [trips, profile]);
 
   return (
     <div
@@ -131,9 +136,9 @@ function SpaceGlobe({ trips, profile }) {
         <Geographies geography={GEO_URL}>
           {({ geographies }) => geographies.map(geo => {
             const s = codeStatus[String(geo.id)];
-            // past = bright teal-blue, upcoming = muted blue-purple, unvisited = dark land
-            const fill = s === 'past' ? '#2e86de' : s === 'upcoming' ? '#1a4a7a' : '#0d2240';
-            const stroke = s === 'past' ? '#3a9af0' : s === 'upcoming' ? '#1e508a' : '#0a1c34';
+            // home = green, past = bright blue, upcoming = muted blue, unvisited = dark land
+            const fill = s === 'home' ? '#22c55e' : s === 'past' ? '#2e86de' : s === 'upcoming' ? '#1a4a7a' : '#0d2240';
+            const stroke = s === 'home' ? '#2ed573' : s === 'past' ? '#3a9af0' : s === 'upcoming' ? '#1e508a' : '#0a1c34';
             return (
               <Geography key={geo.rsmKey} geography={geo}
                 fill={fill}

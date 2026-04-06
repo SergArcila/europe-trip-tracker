@@ -8,16 +8,18 @@ const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json'
 
 
 
-function GlobeMap({ cities, countryStatus, profileVisitedCodes }) {
+function GlobeMap({ cities, countryStatus, profileVisitedCodes, homeCode }) {
   const codeStatus = {};
   for (const [name, s] of Object.entries(countryStatus)) {
     const code = COUNTRY_NUMERIC_CODES[name];
     if (code) codeStatus[code] = s;
   }
-  // Also mark profile countries (home + manually added) as 'past' if not already in trips
+  // Also mark profile countries (manually added) as 'past' if not already in trips
   for (const code of (profileVisitedCodes || [])) {
     if (!codeStatus[code]) codeStatus[code] = 'past';
   }
+  // Home country always green
+  if (homeCode) codeStatus[homeCode] = 'home';
   const markers = cities.filter(c => c.lat && c.lng);
 
   const [rotation, setRotation] = useState([0, -20, 0]);
@@ -139,9 +141,9 @@ function GlobeMap({ cities, countryStatus, profileVisitedCodes }) {
           {({ geographies }) =>
             geographies.map(geo => {
               const s = codeStatus[String(geo.id)];
-              // past = bright visited blue, upcoming = medium planning blue, none = near-black land
-              const fill = s === 'past' ? '#1e6db5' : s === 'upcoming' ? '#1a4a7a' : '#0a1828';
-              const stroke = s === 'past' ? '#2880cc' : s === 'upcoming' ? '#1a4070' : '#081420';
+              // home = green, past = bright blue, upcoming = muted blue, none = near-black land
+              const fill = s === 'home' ? '#22c55e' : s === 'past' ? '#1e6db5' : s === 'upcoming' ? '#1a4a7a' : '#0a1828';
+              const stroke = s === 'home' ? '#2ed573' : s === 'past' ? '#2880cc' : s === 'upcoming' ? '#1a4070' : '#081420';
               return (
                 <Geography
                   key={geo.rsmKey}
@@ -181,9 +183,11 @@ export default function PassportView({ trips, profile }) {
   const stats = getPassportStats(trips, year);
   const countryStatus = buildCountryStatus(trips, year);
 
-  // Profile-added countries (home + manually visited) shown in ALL-TIME view
+  // Home country numeric code (for green highlight) — only in ALL-TIME view
+  const homeCode = !year && profile?.home_country ? COUNTRY_NUMERIC_CODES[profile.home_country] : null;
+
+  // Profile-added countries (manually visited, NOT home since it gets its own color) shown in ALL-TIME view
   const profileVisitedCodes = !year ? [
-    ...(profile?.home_country ? [COUNTRY_NUMERIC_CODES[profile.home_country]].filter(Boolean) : []),
     ...(profile?.countries_visited || []).map(n => COUNTRY_NUMERIC_CODES[n]).filter(Boolean),
   ] : [];
 
@@ -286,24 +290,44 @@ export default function PassportView({ trips, profile }) {
 
       {/* Globe */}
       <div style={{ marginBottom: 16 }}>
-        <GlobeMap cities={stats.cities} countryStatus={countryStatus} profileVisitedCodes={profileVisitedCodes} />
+        <GlobeMap
+          cities={[
+            ...stats.cities,
+            // Profile home city (green marker)
+            ...((!year && profile?.home_city?.lat) ? [{ ...profile.home_city, color: '#22c55e' }] : []),
+            // Profile manually-added cities (blue marker)
+            ...(!year ? (profile?.profile_cities || []).filter(c => c.lat && c.lng).map(c => ({ ...c, color: '#4fc3f7' })) : []),
+          ]}
+          countryStatus={countryStatus}
+          profileVisitedCodes={profileVisitedCodes}
+          homeCode={homeCode}
+        />
       </div>
 
-      {/* Stats Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
-        {[
-          { icon: '🌍', label: 'Countries', value: stats.countriesCount },
-          { icon: '🏙️', label: 'Cities', value: stats.citiesCount },
-          { icon: '📍', label: 'Distance', value: stats.distance > 0 ? `${stats.distance.toLocaleString()} km` : '—' },
-          { icon: '✈️', label: 'Trips', value: stats.trips },
-        ].map((s, i) => (
-          <div key={i} style={{ background: 'var(--bg-card)', borderRadius: 11, padding: '12px 14px', border: '1px solid var(--border)', textAlign: 'center' }}>
-            <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
-            <div style={{ fontSize: 16, fontWeight: 700, fontFamily: f, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: f, marginTop: 2 }}>{s.label}</div>
+      {/* Stats Grid — use merged counts so profile countries/cities are included */}
+      {(() => {
+        const allCityNames = new Set([
+          ...stats.cities.map(c => c.name),
+          ...(!year && profile?.home_city ? [profile.home_city.name] : []),
+          ...(!year ? (profile?.profile_cities || []).map(c => c.name) : []),
+        ]);
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 16 }}>
+            {[
+              { icon: '🌍', label: 'Countries', value: worldTotal },
+              { icon: '🏙️', label: 'Cities', value: allCityNames.size },
+              { icon: '📍', label: 'Distance', value: stats.distance > 0 ? `${stats.distance.toLocaleString()} km` : '—' },
+              { icon: '✈️', label: 'Trips', value: stats.trips },
+            ].map((s, i) => (
+              <div key={i} style={{ background: 'var(--bg-card)', borderRadius: 11, padding: '12px 14px', border: '1px solid var(--border)', textAlign: 'center' }}>
+                <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: f, color: 'var(--text-primary)' }}>{s.value}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: f, marginTop: 2 }}>{s.label}</div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
+        );
+      })()}
 
       {/* Countries */}
       {countries.length > 0 && (
@@ -325,12 +349,12 @@ export default function PassportView({ trips, profile }) {
                 <div key={i} style={{
                   display: 'flex', alignItems: 'center', gap: 4,
                   padding: '6px 10px',
-                  background: visited ? 'var(--border)' : 'transparent',
-                  border: visited ? 'none' : '1px dashed var(--border)',
+                  background: visited ? 'rgba(255,255,255,0.07)' : 'transparent',
+                  border: visited ? '1px solid rgba(255,255,255,0.13)' : '1px dashed rgba(255,255,255,0.15)',
                   borderRadius: 8,
                   fontSize: 11.5, fontFamily: f,
-                  color: visited ? 'var(--text-secondary)' : 'var(--text-secondary)',
-                  opacity: visited ? 1 : 0.45,
+                  color: visited ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  opacity: visited ? 1 : 0.4,
                   transition: 'all .2s',
                 }}>
                   <span style={{ fontSize: 14, filter: visited ? 'none' : 'grayscale(1)' }}>{c.flag}</span>
