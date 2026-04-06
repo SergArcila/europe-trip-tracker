@@ -13,23 +13,28 @@ import { buildCountryStatus } from '../utils/tripHelpers';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-// Stars distributed over a 300%×200% virtual canvas so they can pan.
-// Generated once, deterministically, in three horizontal "tiles" to allow seamless wrap.
-const STARS = Array.from({ length: 800 }, (_, i) => {
-  const x = ((i * 127.1 + 311.7) % 300);   // 0–300 (three tiles wide)
-  const y = ((i * 269.5 + 183.3) % 200);   // 0–200 (two tiles tall)
-  const tier = i < 640 ? 'dim' : i < 760 ? 'medium' : 'bright';
-  const r = tier === 'bright' ? 1.3 + (i % 3) * 0.35
-           : tier === 'medium' ? 0.8 + (i % 4) * 0.15
-           : 0.35 + (i % 6) * 0.09;
-  const o = tier === 'bright' ? 0.80 + (i % 4) * 0.05
-           : tier === 'medium' ? 0.40 + (i % 5) * 0.09
-           : 0.12 + (i % 8) * 0.07;
-  const color = tier === 'bright' && i % 4 === 0 ? '#cce8ff'
-              : tier === 'bright' && i % 4 === 1 ? '#fff8f0'
-              : '#ffffff';
-  return { x, y, r, o, color };
+// Seamless tileable starfield — generate one 100×100 unit tile, then replicate 3×2.
+// Sparse + crisp: Apple Maps style — mostly tiny dim specks, a few medium, handful bright.
+const STAR_TILE = Array.from({ length: 75 }, (_, i) => {
+  const x = (i * 137.508 + 11.3) % 100;
+  const y = (i * 97.31  + 53.7) % 100;
+  // Three tiers by index
+  const tier = i < 58 ? 'dim' : i < 71 ? 'medium' : 'bright';
+  const r = tier === 'bright'  ? 1.1 + (i % 3) * 0.2    // 1.1–1.5
+          : tier === 'medium'  ? 0.55 + (i % 4) * 0.1   // 0.55–0.85
+          :                      0.28 + (i % 6) * 0.06;  // 0.28–0.58
+  const o = tier === 'bright'  ? 0.80 + (i % 3) * 0.07  // 0.80–0.94
+          : tier === 'medium'  ? 0.38 + (i % 5) * 0.08  // 0.38–0.70
+          :                      0.10 + (i % 9) * 0.06;  // 0.10–0.58
+  return { x, y, r, o, tier };
 });
+
+// 3 × 2 grid of tiles → 450 stars total, ~75 visible at any time
+const STARS = [0, 1, 2].flatMap(tx =>
+  [0, 1].flatMap(ty =>
+    STAR_TILE.map(s => ({ ...s, x: s.x + tx * 100, y: s.y + ty * 100 }))
+  )
+);
 
 function SpaceGlobe({ trips, profile }) {
   // Build date-aware code → status map (past / upcoming), plus profile countries as 'past'
@@ -108,11 +113,10 @@ function SpaceGlobe({ trips, profile }) {
     trips.flatMap(t => t.cities.filter(c => c.lat && c.lng).map(c => ({ ...c, tripColor: c.color || '#4fc3f7' }))),
   [trips]);
 
-  // Parallax offset: shift star layer based on globe rotation
-  // rotation[0] is longitude (auto-decrementing), rotation[1] is latitude
-  // Map to a 0-100 x-shift across the 300%-wide star canvas (wrapping)
-  const starX = (((rotation[0] * 0.5) % 100) + 100) % 100; // 0–100, wraps smoothly
-  const starY = Math.max(0, Math.min(100, 50 + rotation[1] * 0.3)); // 0–100
+  // Parallax: map rotation to a 0–100 offset within the seamless tile grid.
+  // Canvas is 300% wide × 200% tall; we always show tile [1,0] at rest.
+  const starOffX = (((rotation[0] * 0.4) % 100) + 100) % 100; // wraps 0–100
+  const starOffY = Math.max(0, Math.min(50, 25 + rotation[1] * 0.25)); // 0–50
 
   return (
     <div
@@ -121,25 +125,26 @@ function SpaceGlobe({ trips, profile }) {
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp}
       style={{ width: '100%', height: '100%', cursor: 'grab', userSelect: 'none', touchAction: 'none', position: 'relative', overflow: 'hidden', background: '#000' }}
     >
-      {/* Parallax star layer — 300% wide so it can pan without gaps */}
+      {/* Parallax star layer — 300×200% seamlessly tileable */}
       <div style={{
         position: 'absolute',
         width: '300%', height: '200%',
-        top: `${-starY * 0.5}%`,
-        left: `${-starX - 100}%`,
+        left: `${-(starOffX + 100)}%`,
+        top: `${-(starOffY + 25)}%`,
         pointerEvents: 'none', zIndex: 0,
-        willChange: 'transform',
       }}>
         {STARS.map((s, i) => (
           <div key={i} style={{
             position: 'absolute',
             left: `${(s.x / 300) * 100}%`,
             top: `${(s.y / 200) * 100}%`,
-            width: s.r * 2, height: s.r * 2,
+            width: s.r * 2,
+            height: s.r * 2,
             borderRadius: '50%',
-            background: s.color,
+            background: '#fff',
             opacity: s.o,
-            boxShadow: s.r > 1.2 ? `0 0 ${s.r * 4}px ${s.r * 1.5}px ${s.color}44` : 'none',
+            // Only the brightest few get a faint halo — rest are clean crisp dots
+            boxShadow: s.tier === 'bright' ? `0 0 ${s.r * 3}px ${s.r}px rgba(255,255,255,0.3)` : 'none',
           }} />
         ))}
       </div>
