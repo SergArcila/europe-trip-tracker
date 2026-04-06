@@ -4,7 +4,7 @@ import TripCard from './TripCard';
 import PassportView from './PassportView';
 import { f, pf } from '../utils/constants';
 
-export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveTrip, onUnarchiveTrip, onDeleteTrip, onLeaveTrip }) {
+export default function TripList({ trips, profile, onSelectTrip, onCreateTrip, onArchiveTrip, onUnarchiveTrip, onDeleteTrip, onLeaveTrip }) {
   const [archiveOpen, setArchiveOpen] = useState(false);
   const ownedActive = trips.filter(t => !t.archived && !t.isCollaborator);
   const collaborating = trips.filter(t => !t.archived && t.isCollaborator);
@@ -127,7 +127,7 @@ export default function TripList({ trips, onSelectTrip, onCreateTrip, onArchiveT
       )}
 
       {/* Passport */}
-      <PassportView trips={trips} />
+      <PassportView trips={trips} profile={profile} />
     </div>
   );
 }

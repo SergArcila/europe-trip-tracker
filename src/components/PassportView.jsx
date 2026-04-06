@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, Graticule, Sphere } from 'react-simple-maps';
 import { getPassportStats, getAllYears } from '../utils/tripHelpers';
+import { ALL_COUNTRIES, TOTAL_COUNTRIES } from '../utils/countries';
 import { f, pf } from '../utils/constants';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
@@ -218,7 +219,7 @@ function GlobeMap({ cities, countryStatus }) {
   );
 }
 
-export default function PassportView({ trips }) {
+export default function PassportView({ trips, profile }) {
   const years = ['ALL-TIME', ...getAllYears(trips)];
   const [selectedYear, setSelectedYear] = useState('ALL-TIME');
 
@@ -226,6 +227,7 @@ export default function PassportView({ trips }) {
   const stats = getPassportStats(trips, year);
   const countryStatus = buildCountryStatus(trips, year);
 
+  // Merge trip countries with manually-added profile countries
   const countryMap = {};
   trips
     .filter(t => !year || t.startDate?.startsWith(year))
@@ -236,18 +238,57 @@ export default function PassportView({ trips }) {
       });
     });
 
+  // Profile countries (only shown in ALL-TIME, or if no year filter)
+  const profileHomeCountry = !year && profile?.home_country ? profile.home_country : null;
+  const profileVisited = (!year && profile?.countries_visited) ? profile.countries_visited : [];
+
+  if (profileHomeCountry && !countryMap[profileHomeCountry]) {
+    const found = ALL_COUNTRIES.find(c => c.name === profileHomeCountry);
+    countryMap[profileHomeCountry] = found?.flag || '🏳️';
+  }
+  profileVisited.forEach(name => {
+    if (!countryMap[name]) {
+      const found = ALL_COUNTRIES.find(c => c.name === name);
+      countryMap[name] = found?.flag || '🏳️';
+    }
+  });
+
   const countries = Object.entries(countryMap).map(([name, flag]) => ({ name, flag }));
+
+  // Total unique countries (trips + profile) for world %
+  const allVisitedNames = new Set([
+    ...countries.map(c => c.name),
+    ...(profile?.home_country ? [profile.home_country] : []),
+    ...(profile?.countries_visited || []),
+  ]);
+  const worldTotal = allVisitedNames.size;
+  const worldPct = Math.round((worldTotal / TOTAL_COUNTRIES) * 100);
 
   return (
     <div style={{ marginTop: 40, marginBottom: 20 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 4px' }}>
-          ✈️ Passport
-        </h2>
-        <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: f, margin: 0 }}>
-          Your travel history across the world
-        </p>
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 4px' }}>
+            ✈️ Passport
+          </h2>
+          <p style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: f, margin: 0 }}>
+            Your travel history across the world
+          </p>
+        </div>
+        {worldTotal > 0 && (
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>{worldPct}%</div>
+            <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: f, marginTop: 1 }}>{worldTotal} / {TOTAL_COUNTRIES} countries</div>
+          </div>
+        )}
       </div>
+
+      {/* World progress bar */}
+      {worldTotal > 0 && (
+        <div style={{ marginBottom: 16, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+          <div style={{ width: `${worldPct}%`, height: '100%', background: 'linear-gradient(90deg, #1a6aaa, #2e86de)', borderRadius: 2 }} />
+        </div>
+      )}
 
       {/* Year tabs */}
       <div style={{ display: 'flex', gap: 6, overflow: 'auto', marginBottom: 16, paddingBottom: 4 }}>

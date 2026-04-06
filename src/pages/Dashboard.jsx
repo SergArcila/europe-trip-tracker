@@ -123,6 +123,7 @@ export default function Dashboard() {
 
       <TripList
         trips={trips}
+        profile={profile}
         onSelectTrip={handleSelectTrip}
         onCreateTrip={handleCreateTrip}
         onArchiveTrip={handleArchiveTrip}
