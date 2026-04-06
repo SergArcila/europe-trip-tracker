@@ -13,21 +13,22 @@ import { buildCountryStatus } from '../utils/tripHelpers';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-// More realistic starfield: mix of many dim stars + a few bright ones + rare large ones
-const STARS = Array.from({ length: 320 }, (_, i) => {
-  const seed1 = (i * 127.1 + 311.7) % 100;
-  const seed2 = (i * 269.5 + 183.3) % 100;
-  const seed3 = (i * 419.2 + 73.1) % 1;
-  // Most stars are tiny and dim; a few are medium; rare ones are large and bright
-  const tier = i < 260 ? 'dim' : i < 305 ? 'medium' : 'bright';
-  return {
-    x: seed1,
-    y: seed2,
-    r: tier === 'bright' ? 1.4 + (i % 3) * 0.3 : tier === 'medium' ? 0.9 + (i % 4) * 0.15 : 0.4 + (i % 5) * 0.1,
-    o: tier === 'bright' ? 0.75 + (i % 4) * 0.06 : tier === 'medium' ? 0.45 + (i % 5) * 0.08 : 0.15 + (i % 7) * 0.07,
-    // Some bright stars get a subtle blue-white tint
-    color: tier === 'bright' && i % 3 === 0 ? '#cce8ff' : tier === 'bright' && i % 3 === 1 ? '#fff8f0' : '#ffffff',
-  };
+// Stars distributed over a 300%×200% virtual canvas so they can pan.
+// Generated once, deterministically, in three horizontal "tiles" to allow seamless wrap.
+const STARS = Array.from({ length: 800 }, (_, i) => {
+  const x = ((i * 127.1 + 311.7) % 300);   // 0–300 (three tiles wide)
+  const y = ((i * 269.5 + 183.3) % 200);   // 0–200 (two tiles tall)
+  const tier = i < 640 ? 'dim' : i < 760 ? 'medium' : 'bright';
+  const r = tier === 'bright' ? 1.3 + (i % 3) * 0.35
+           : tier === 'medium' ? 0.8 + (i % 4) * 0.15
+           : 0.35 + (i % 6) * 0.09;
+  const o = tier === 'bright' ? 0.80 + (i % 4) * 0.05
+           : tier === 'medium' ? 0.40 + (i % 5) * 0.09
+           : 0.12 + (i % 8) * 0.07;
+  const color = tier === 'bright' && i % 4 === 0 ? '#cce8ff'
+              : tier === 'bright' && i % 4 === 1 ? '#fff8f0'
+              : '#ffffff';
+  return { x, y, r, o, color };
 });
 
 function SpaceGlobe({ trips, profile }) {
@@ -107,17 +108,45 @@ function SpaceGlobe({ trips, profile }) {
     trips.flatMap(t => t.cities.filter(c => c.lat && c.lng).map(c => ({ ...c, tripColor: c.color || '#4fc3f7' }))),
   [trips]);
 
+  // Parallax offset: shift star layer based on globe rotation
+  // rotation[0] is longitude (auto-decrementing), rotation[1] is latitude
+  // Map to a 0-100 x-shift across the 300%-wide star canvas (wrapping)
+  const starX = (((rotation[0] * 0.5) % 100) + 100) % 100; // 0–100, wraps smoothly
+  const starY = Math.max(0, Math.min(100, 50 + rotation[1] * 0.3)); // 0–100
+
   return (
     <div
       ref={mapRef}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
       onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onMouseUp}
-      style={{ width: '100%', height: '100%', cursor: 'grab', userSelect: 'none', touchAction: 'none' }}
+      style={{ width: '100%', height: '100%', cursor: 'grab', userSelect: 'none', touchAction: 'none', position: 'relative', overflow: 'hidden', background: '#000' }}
     >
+      {/* Parallax star layer — 300% wide so it can pan without gaps */}
+      <div style={{
+        position: 'absolute',
+        width: '300%', height: '200%',
+        top: `${-starY * 0.5}%`,
+        left: `${-starX - 100}%`,
+        pointerEvents: 'none', zIndex: 0,
+        willChange: 'transform',
+      }}>
+        {STARS.map((s, i) => (
+          <div key={i} style={{
+            position: 'absolute',
+            left: `${(s.x / 300) * 100}%`,
+            top: `${(s.y / 200) * 100}%`,
+            width: s.r * 2, height: s.r * 2,
+            borderRadius: '50%',
+            background: s.color,
+            opacity: s.o,
+            boxShadow: s.r > 1.2 ? `0 0 ${s.r * 4}px ${s.r * 1.5}px ${s.color}44` : 'none',
+          }} />
+        ))}
+      </div>
       <ComposableMap
         projection="geoOrthographic"
         projectionConfig={{ rotate: rotation, scale }}
-        style={{ width: '100%', height: '100%' }}
+        style={{ width: '100%', height: '100%', position: 'relative', zIndex: 1 }}
       >
         <defs>
           {/* Ocean: deep navy with lighter lit-side */}
@@ -216,22 +245,6 @@ export default function Dashboard() {
 
   return (
     <div style={{ background: '#000', minHeight: '100vh' }}>
-      {/* Stars — only behind globe */}
-      <div style={{ position: 'absolute', inset: 0, height: '58vh', zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {STARS.map((s, i) => (
-          <div key={i} style={{
-            position: 'absolute',
-            left: `${s.x}%`, top: `${s.y}%`,
-            width: s.r * 2, height: s.r * 2,
-            borderRadius: '50%',
-            background: s.color,
-            opacity: s.o,
-            // Bright stars get a subtle glow via box-shadow
-            boxShadow: s.r > 1.2 ? `0 0 ${s.r * 3}px ${s.r}px ${s.color}55` : 'none',
-          }} />
-        ))}
-      </div>
-
       {/* Globe hero */}
       <div style={{ position: 'relative', zIndex: 1, height: '58vh', minHeight: 300, maxHeight: 500 }}>
         <SpaceGlobe trips={trips} profile={profile} />
