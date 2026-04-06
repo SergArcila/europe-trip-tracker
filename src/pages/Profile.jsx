@@ -146,6 +146,10 @@ export default function Profile() {
   const fileRef = useRef(null);
 
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [savingUsername, setSavingUsername] = useState(false);
+  const [usernameError, setUsernameError] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [homeCountry, setHomeCountry] = useState(null);
   const [homeCity, setHomeCity] = useState(null);      // { name, lat, lng }
@@ -157,6 +161,7 @@ export default function Profile() {
   const [saving, setSaving] = useState(false);
   const [savingCountries, setSavingCountries] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
 
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -169,6 +174,7 @@ export default function Profile() {
   useEffect(() => {
     getProfile(user.id).then(profile => {
       setName(profile?.name || '');
+      setUsername(profile?.username || '');
       setAvatarUrl(profile?.avatar_url || null);
       if (profile?.home_country) {
         const found = ALL_COUNTRIES.find(c => c.name === profile.home_country);
@@ -196,6 +202,30 @@ export default function Profile() {
       setEditing(false);
     } catch { setError('Failed to save. Try again.'); }
     finally { setSaving(false); }
+  };
+
+  const handleSaveUsername = async () => {
+    const val = username.trim().toLowerCase();
+    if (!val) { setUsernameError('Username cannot be empty.'); return; }
+    if (!/^[a-z0-9_]{3,30}$/.test(val)) { setUsernameError('3–30 chars: letters, numbers, underscores only.'); return; }
+    setSavingUsername(true); setUsernameError('');
+    try {
+      await upsertProfile(user.id, { username: val });
+      await refreshProfile(user.id);
+      setUsername(val);
+      setEditingUsername(false);
+    } catch (e) {
+      setUsernameError(e.message?.includes('unique') ? 'That username is already taken.' : 'Failed to save. Try again.');
+    }
+    finally { setSavingUsername(false); }
+  };
+
+  const handleCopyProfileLink = () => {
+    const link = `${window.location.origin}/u/${username}`;
+    navigator.clipboard.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
   };
 
   const saveAll = async (newHome, newHomeCity, newVisited, newCities) => {
@@ -386,6 +416,53 @@ export default function Profile() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: f }}>{name || 'Not set'}</span>
               <button onClick={() => setEditing(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)', fontFamily: f }}>Edit</button>
+            </div>
+          )}
+        </div>
+
+        {/* Username + public profile link */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', padding: '16px', marginBottom: 12 }}>
+          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--text-secondary)', fontFamily: f, letterSpacing: '.04em', textTransform: 'uppercase', marginBottom: 10 }}>Username</div>
+          {editingUsername ? (
+            <div>
+              <input
+                value={username}
+                onChange={e => { setUsername(e.target.value.toLowerCase()); setUsernameError(''); }}
+                onKeyDown={e => { if (e.key === 'Enter') handleSaveUsername(); if (e.key === 'Escape') setEditingUsername(false); }}
+                placeholder="e.g. sergio_travels"
+                style={inputStyle}
+                autoFocus
+              />
+              {usernameError && <div style={{ fontSize: 11.5, color: '#E63946', fontFamily: f, marginTop: 6 }}>{usernameError}</div>}
+              <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 5 }}>Letters, numbers, underscores · 3–30 chars</div>
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <button onClick={() => { setEditingUsername(false); setUsernameError(''); }} style={{ flex: 1, padding: '8px', borderRadius: 8, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-secondary)', fontSize: 13, fontFamily: f, cursor: 'pointer' }}>Cancel</button>
+                <button onClick={handleSaveUsername} disabled={savingUsername} style={{ flex: 1, padding: '8px', borderRadius: 8, border: 'none', background: 'var(--text-primary)', color: 'var(--bg)', fontSize: 13, fontWeight: 600, fontFamily: f, cursor: 'pointer' }}>{savingUsername ? 'Saving…' : 'Save'}</button>
+              </div>
+            </div>
+          ) : username ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: 14, color: 'var(--text-primary)', fontFamily: f, fontWeight: 600 }}>@{username}</span>
+                <button onClick={() => setEditingUsername(true)} style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 7, padding: '5px 12px', cursor: 'pointer', fontSize: 12, color: 'var(--text-secondary)', fontFamily: f }}>Change</button>
+              </div>
+              {/* Share link */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'var(--bg-input)', borderRadius: 9, border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', fontFamily: f, flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {window.location.origin}/u/{username}
+                </span>
+                <button
+                  onClick={handleCopyProfileLink}
+                  style={{ background: copied ? '#22c55e20' : 'var(--border)', border: copied ? '1px solid #22c55e44' : 'none', borderRadius: 6, padding: '4px 10px', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, fontFamily: f, color: copied ? '#22c55e' : 'var(--text-secondary)', flexShrink: 0, transition: 'all .15s' }}
+                >
+                  {copied ? '✓ Copied' : 'Copy'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: f, marginBottom: 10 }}>Set a username to get a shareable profile link</div>
+              <button onClick={() => setEditingUsername(true)} style={{ padding: '8px 16px', borderRadius: 9, border: 'none', background: 'var(--text-primary)', color: 'var(--bg)', fontSize: 13, fontWeight: 600, fontFamily: f, cursor: 'pointer' }}>Set Username</button>
             </div>
           )}
         </div>

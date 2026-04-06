@@ -1125,3 +1125,136 @@ export async function getSharedTrip(token) {
 
   return result;
 }
+
+// ─────────────────────────────────────────────────────────────
+// Social — Public Profiles
+// ─────────────────────────────────────────────────────────────
+
+export async function getPublicProfile(username) {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .ilike('username', username)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getPublicTrips(userId) {
+  const { data: tripRows, error } = await supabase
+    .from('trips')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('archived', false)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  if (!tripRows?.length) return [];
+
+  const tripIds = tripRows.map(t => t.id);
+  const { data: cities } = await supabase
+    .from('cities')
+    .select('*')
+    .in('trip_id', tripIds)
+    .order('sort_order', { ascending: true });
+
+  return tripRows.map(t => {
+    const tc = (cities || []).filter(c => c.trip_id === t.id);
+    const trip = toTripFormat(t);
+    trip.cities = tc.map(c => ({
+      id: c.id,
+      name: c.name,
+      country: c.country,
+      flag: c.flag,
+      color: c.color,
+      lat: c.lat,
+      lng: c.lng,
+      startDate: c.start_date,
+      endDate: c.end_date,
+      categories: {},
+      schedule: [],
+    }));
+    return trip;
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// Social — Follow System
+// ─────────────────────────────────────────────────────────────
+
+export async function followUser(targetUserId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from('friendships')
+    .insert({ follower_id: user.id, following_id: targetUserId });
+  if (error) throw error;
+}
+
+export async function unfollowUser(targetUserId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  const { error } = await supabase
+    .from('friendships')
+    .delete()
+    .eq('follower_id', user.id)
+    .eq('following_id', targetUserId);
+  if (error) throw error;
+}
+
+export async function checkIsFollowing(targetUserId) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return false;
+  const { count } = await supabase
+    .from('friendships')
+    .select('*', { count: 'exact', head: true })
+    .eq('follower_id', user.id)
+    .eq('following_id', targetUserId);
+  return (count ?? 0) > 0;
+}
+
+export async function getFollowCounts(userId) {
+  const [followersRes, followingRes] = await Promise.all([
+    supabase.from('friendships').select('*', { count: 'exact', head: true }).eq('following_id', userId),
+    supabase.from('friendships').select('*', { count: 'exact', head: true }).eq('follower_id', userId),
+  ]);
+  return {
+    followers: followersRes.count ?? 0,
+    following: followingRes.count ?? 0,
+  };
+}
+
+export async function searchUsers(query) {
+  if (!query || query.length < 2) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, username, avatar_url, home_country')
+    .or(`username.ilike.%${query}%,name.ilike.%${query}%`)
+    .eq('is_public', true)
+    .limit(10);
+  if (error) throw error;
+  return data || [];
+}
+
+// ─────────────────────────────────────────────────────────────
+// Social — Feed
+// ─────────────────────────────────────────────────────────────
+
+export async function publishFeedEvent(eventType, tripId = null, payload = {}) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return;
+  const { error } = await supabase
+    .from('feed_events')
+    .insert({ user_id: user.id, event_type: eventType, trip_id: tripId, payload });
+  if (error) console.warn('publishFeedEvent failed silently:', error.message);
+}
+
+export async function getFeed({ limit = 20, before = null } = {}) {
+  let query = supabase
+    .from('feed_events')
+    .select(`*, profiles:user_id (id, name, username, avatar_url, home_country)`)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (before) query = query.lt('created_at', before);
+  const { data, error } = await query;
+  if (error) throw error;
+  return data || [];
+}

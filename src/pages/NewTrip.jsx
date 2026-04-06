@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import TripForm from '../components/TripForm';
 import { ChevLeft } from '../components/common/Icons';
-import { createTrip } from '../lib/api';
+import { createTrip, publishFeedEvent } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { f } from '../utils/constants';
@@ -14,6 +14,11 @@ export default function NewTrip() {
   const handleSave = async (tripData) => {
     try {
       const tripId = await createTrip(user.id, tripData);
+      // Publish feed event (fire-and-forget)
+      publishFeedEvent('trip_created', tripId, {
+        tripName: tripData.name,
+        cities: (tripData.cities || []).map(c => c.name).filter(Boolean),
+      });
       // Force Dashboard to re-fetch the list so the new trip appears
       invalidateTripList();
       navigate(`/trips/${tripId}`);

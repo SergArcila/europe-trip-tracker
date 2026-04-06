@@ -229,6 +229,14 @@ export default function Dashboard() {
               </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {/* Social feed */}
+              <button
+                onClick={() => navigate('/feed')}
+                style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 10, cursor: 'pointer', padding: '7px 12px', flexShrink: 0, fontSize: 13, fontFamily: f, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}
+                title="Social Feed"
+              >
+                👥
+              </button>
               {/* Profile avatar */}
               <button
                 onClick={() => navigate('/profile')}
