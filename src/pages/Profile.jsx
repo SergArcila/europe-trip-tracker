@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { getProfile, updateProfile, uploadAvatar } from '../lib/api';
+import { getProfile, updateProfile, upsertProfile, uploadAvatar } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
@@ -106,7 +106,7 @@ export default function Profile() {
   const handleSaveName = async () => {
     setSaving(true); setError('');
     try {
-      await updateProfile(user.id, { name: name.trim() });
+      await upsertProfile(user.id, { name: name.trim() });
       await refreshProfile(user.id);
       setEditing(false);
     } catch { setError('Failed to save. Try again.'); }
@@ -116,13 +116,17 @@ export default function Profile() {
   const saveCountries = async (newHome, newVisited) => {
     setSavingCountries(true);
     try {
-      await updateProfile(user.id, {
+      // upsert ensures the row is created if it doesn't exist yet
+      await upsertProfile(user.id, {
         home_country: newHome?.name || null,
         countries_visited: newVisited.map(c => c.name),
       });
       // Refresh AuthContext so the globe + dashboard update immediately
       await refreshProfile(user.id);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error('saveCountries error:', e);
+      setError('Failed to save. Try again.');
+    }
     finally { setSavingCountries(false); }
   };
 
