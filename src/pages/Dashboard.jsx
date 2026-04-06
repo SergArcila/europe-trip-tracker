@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ComposableMap, Geographies, Geography, Marker, Graticule, Sphere } from 'react-simple-maps';
 import { useAuth } from '../context/AuthContext';
@@ -42,7 +42,11 @@ function SpaceGlobe({ trips, profile }) {
 
   useEffect(() => {
     const tick = () => {
-      if (!isDragging.current) setRotation(r => [r[0] - 0.04, r[1], r[2]]);
+      if (!isDragging.current) {
+        startTransition(() => {
+          setRotation(r => [r[0] - 0.04, r[1], r[2]]);
+        });
+      }
       animRef.current = requestAnimationFrame(tick);
     };
     animRef.current = requestAnimationFrame(tick);
