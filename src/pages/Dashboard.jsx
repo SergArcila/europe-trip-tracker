@@ -13,12 +13,22 @@ import { buildCountryStatus } from '../utils/tripHelpers';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
-const STARS = Array.from({ length: 180 }, (_, i) => ({
-  x: ((i * 137.508) % 100),
-  y: ((i * 97.3) % 100),
-  r: i % 5 === 0 ? 1.5 : i % 3 === 0 ? 1.1 : 0.7,
-  o: 0.3 + (i % 7) * 0.1,
-}));
+// More realistic starfield: mix of many dim stars + a few bright ones + rare large ones
+const STARS = Array.from({ length: 320 }, (_, i) => {
+  const seed1 = (i * 127.1 + 311.7) % 100;
+  const seed2 = (i * 269.5 + 183.3) % 100;
+  const seed3 = (i * 419.2 + 73.1) % 1;
+  // Most stars are tiny and dim; a few are medium; rare ones are large and bright
+  const tier = i < 260 ? 'dim' : i < 305 ? 'medium' : 'bright';
+  return {
+    x: seed1,
+    y: seed2,
+    r: tier === 'bright' ? 1.4 + (i % 3) * 0.3 : tier === 'medium' ? 0.9 + (i % 4) * 0.15 : 0.4 + (i % 5) * 0.1,
+    o: tier === 'bright' ? 0.75 + (i % 4) * 0.06 : tier === 'medium' ? 0.45 + (i % 5) * 0.08 : 0.15 + (i % 7) * 0.07,
+    // Some bright stars get a subtle blue-white tint
+    color: tier === 'bright' && i % 3 === 0 ? '#cce8ff' : tier === 'bright' && i % 3 === 1 ? '#fff8f0' : '#ffffff',
+  };
+});
 
 function SpaceGlobe({ trips, profile }) {
   // Build date-aware code → status map (past / upcoming), plus profile countries as 'past'
@@ -209,7 +219,16 @@ export default function Dashboard() {
       {/* Stars — only behind globe */}
       <div style={{ position: 'absolute', inset: 0, height: '58vh', zIndex: 0, pointerEvents: 'none', overflow: 'hidden' }}>
         {STARS.map((s, i) => (
-          <div key={i} style={{ position: 'absolute', left: `${s.x}%`, top: `${s.y}%`, width: s.r * 2, height: s.r * 2, borderRadius: '50%', background: '#fff', opacity: s.o }} />
+          <div key={i} style={{
+            position: 'absolute',
+            left: `${s.x}%`, top: `${s.y}%`,
+            width: s.r * 2, height: s.r * 2,
+            borderRadius: '50%',
+            background: s.color,
+            opacity: s.o,
+            // Bright stars get a subtle glow via box-shadow
+            boxShadow: s.r > 1.2 ? `0 0 ${s.r * 3}px ${s.r}px ${s.color}55` : 'none',
+          }} />
         ))}
       </div>
 
