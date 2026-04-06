@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
   const loadProfile = useCallback(async (userId) => {
     const { data } = await supabase
       .from('profiles')
-      .select('id, name, avatar_url')
+      .select('id, name, avatar_url, home_country, countries_visited')
       .eq('id', userId)
       .single();
     setProfile(data ?? null);
