@@ -8,7 +8,8 @@ import { PlusIcon, ChevDown } from '../components/common/Icons';
 import TripCard from '../components/TripCard';
 import PassportView from '../components/PassportView';
 import { f, pf } from '../utils/constants';
-import { buildVisitedCodes } from '../utils/countries';
+import { COUNTRY_NUMERIC_CODES } from '../utils/countries';
+import { buildCountryStatus } from '../utils/tripHelpers';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
@@ -20,7 +21,24 @@ const STARS = Array.from({ length: 180 }, (_, i) => ({
 }));
 
 function SpaceGlobe({ trips, profile }) {
-  const visitedCodes = useMemo(() => buildVisitedCodes(trips, profile), [trips, profile]);
+  // Build date-aware code → status map (past / upcoming), plus profile countries as 'past'
+  const codeStatus = useMemo(() => {
+    const countryStatus = buildCountryStatus(trips); // { countryName → 'past'|'upcoming' }
+    // Add profile home + manually visited as 'past'
+    if (profile?.home_country && !countryStatus[profile.home_country]) {
+      countryStatus[profile.home_country] = 'past';
+    }
+    (profile?.countries_visited || []).forEach(n => {
+      if (!countryStatus[n]) countryStatus[n] = 'past';
+    });
+    // Convert name→status to numericCode→status
+    const result = {};
+    for (const [name, s] of Object.entries(countryStatus)) {
+      const code = COUNTRY_NUMERIC_CODES[name];
+      if (code) result[code] = s;
+    }
+    return result;
+  }, [trips, profile]);
   const [rotation, setRotation] = useState([-10, -30, 0]);
   const [scale, setScale] = useState(220);
   const isDragging = useRef(false);
@@ -92,36 +110,37 @@ function SpaceGlobe({ trips, profile }) {
         style={{ width: '100%', height: '100%' }}
       >
         <defs>
-          <radialGradient id="earthGrad" cx="40%" cy="38%" r="62%">
-            <stop offset="0%" stopColor="#0a1a2e" />
-            <stop offset="55%" stopColor="#050e1c" />
-            <stop offset="100%" stopColor="#010812" />
+          {/* Ocean: deep navy with lighter lit-side */}
+          <radialGradient id="earthGrad" cx="38%" cy="32%" r="65%">
+            <stop offset="0%" stopColor="#1c3d6e" />
+            <stop offset="40%" stopColor="#0e2347" />
+            <stop offset="100%" stopColor="#04111f" />
           </radialGradient>
+          {/* Atmospheric glow around edge */}
           <radialGradient id="atmGrad" cx="50%" cy="50%" r="50%">
-            <stop offset="80%" stopColor="transparent" stopOpacity="0" />
-            <stop offset="93%" stopColor="#3a7fd4" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#5aa0ff" stopOpacity="0.1" />
+            <stop offset="76%" stopColor="transparent" stopOpacity="0" />
+            <stop offset="90%" stopColor="#4488cc" stopOpacity="0.35" />
+            <stop offset="100%" stopColor="#66aaff" stopOpacity="0.12" />
           </radialGradient>
           <filter id="cityGlow" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur" />
             <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
-          <filter id="visitedGlow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
         </defs>
-        <Sphere fill="url(#earthGrad)" stroke="#0d1f38" strokeWidth={0.4} />
+        <Sphere fill="url(#earthGrad)" stroke="#1e3f6a" strokeWidth={0.5} />
         <Sphere fill="url(#atmGrad)" stroke="none" />
-        <Graticule stroke="#081528" strokeWidth={0.3} />
+        <Graticule stroke="#0a1e38" strokeWidth={0.35} />
         <Geographies geography={GEO_URL}>
           {({ geographies }) => geographies.map(geo => {
-            const isVisited = visitedCodes.has(String(geo.id));
+            const s = codeStatus[String(geo.id)];
+            // past = bright teal-blue, upcoming = muted blue-purple, unvisited = dark land
+            const fill = s === 'past' ? '#2e86de' : s === 'upcoming' ? '#1a4a7a' : '#0d2240';
+            const stroke = s === 'past' ? '#3a9af0' : s === 'upcoming' ? '#1e508a' : '#0a1c34';
             return (
               <Geography key={geo.rsmKey} geography={geo}
-                fill={isVisited ? '#1a5c8e' : '#0a1828'}
-                stroke={isVisited ? '#1e6ea8' : '#081420'}
-                strokeWidth={isVisited ? 0.5 : 0.3}
+                fill={fill}
+                stroke={stroke}
+                strokeWidth={s ? 0.5 : 0.3}
                 style={{ default: { outline: 'none' }, hover: { outline: 'none' }, pressed: { outline: 'none' } }}
               />
             );

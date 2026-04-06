@@ -1,40 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { ComposableMap, Geographies, Geography, Marker, Graticule, Sphere } from 'react-simple-maps';
-import { getPassportStats, getAllYears } from '../utils/tripHelpers';
+import { getPassportStats, getAllYears, buildCountryStatus } from '../utils/tripHelpers';
 import { ALL_COUNTRIES, TOTAL_COUNTRIES, COUNTRY_NUMERIC_CODES } from '../utils/countries';
 import { f, pf } from '../utils/constants';
 
 const GEO_URL = 'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json';
 
 
-// Returns 'past' | 'upcoming' | undefined for each country
-function buildCountryStatus(trips, year) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const status = {}; // country name → 'past' | 'upcoming'
-  const filtered = year ? trips.filter(t => t.startDate?.startsWith(year)) : trips;
-  filtered.forEach(trip => {
-    trip.cities.forEach(city => {
-      const key = city.country || city.name;
-      if (!key) return;
-      const start = city.startDate ? new Date(city.startDate + 'T00:00:00') : null;
-      const end = city.endDate ? new Date(city.endDate + 'T00:00:00') : null;
-      let s;
-      if (!start && !end) {
-        s = 'upcoming'; // no dates → treat as planned
-      } else if (end && end < today) {
-        s = 'past'; // already visited
-      } else if (start && start <= today) {
-        s = 'past'; // currently there
-      } else {
-        s = 'upcoming'; // future
-      }
-      // past wins over upcoming
-      if (!status[key] || s === 'past') status[key] = s;
-    });
-  });
-  return status;
-}
 
 function GlobeMap({ cities, countryStatus, profileVisitedCodes }) {
   const codeStatus = {};

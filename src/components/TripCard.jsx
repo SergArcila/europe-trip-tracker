@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { tripProgress, formatDateRange, tripDays } from '../utils/tripHelpers';
+import { tripProgress, formatDateRange, tripDays, getTripStatus } from '../utils/tripHelpers';
 import { f, pf } from '../utils/constants';
 
 function MemberAvatar({ member, size = 26, overlap = false }) {
@@ -50,6 +50,7 @@ export default function TripCard({ trip, onClick, archived = false, onArchive, o
   const { t, d, pct: progress } = tripProgress(trip);
   const dateStr = formatDateRange(trip.startDate, trip.endDate);
   const days = tripDays(trip);
+  const status = getTripStatus(trip);
   const hasCities = trip.cities.length > 0;
 
   // Unique countries (deduplicated by country name)
@@ -92,7 +93,18 @@ export default function TripCard({ trip, onClick, archived = false, onArchive, o
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
             <div style={{ fontSize: 30, lineHeight: 1, flexShrink: 0 }}>{trip.coverEmoji || '✈️'}</div>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 16, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.01em', marginBottom: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{trip.name}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 1 }}>
+                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{trip.name}</div>
+                {!archived && status.type !== 'past' && (
+                  <span style={{
+                    flexShrink: 0, fontSize: 11, fontWeight: 700, fontFamily: f, letterSpacing: '.02em',
+                    padding: '2px 8px', borderRadius: 20,
+                    background: status.type === 'active' ? '#34C75920' : 'var(--border)',
+                    color: status.type === 'active' ? '#34C759' : 'var(--text-secondary)',
+                    border: status.type === 'active' ? '1px solid #34C75940' : 'none',
+                  }}>{status.label}</span>
+                )}
+              </div>
               {/* Stat line */}
               <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f, lineHeight: 1.4 }}>
                 {dateStr || 'No dates set'}
