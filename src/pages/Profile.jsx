@@ -7,6 +7,7 @@ import { useData } from '../context/DataContext';
 import { useTheme } from '../context/ThemeContext';
 import { ChevLeft } from '../components/common/Icons';
 import { ALL_COUNTRIES, TOTAL_COUNTRIES } from '../utils/countries';
+import { getPassportStats } from '../utils/tripHelpers';
 import { f, pf } from '../utils/constants';
 
 function Avatar({ url, name, size = 80 }) {
@@ -60,7 +61,7 @@ function CountrySearch({ placeholder, onSelect, exclude = [] }) {
 
 export default function Profile() {
   const { user, refreshProfile } = useAuth();
-  const { clearCache } = useData();
+  const { tripList, loadTrips, clearCache } = useData();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const fileRef = useRef(null);
@@ -69,6 +70,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [homeCountry, setHomeCountry] = useState(null);
   const [countriesVisited, setCountriesVisited] = useState([]);
+  const [trips, setTrips] = useState(tripList ?? []);
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -77,6 +79,11 @@ export default function Profile() {
   const [error, setError] = useState('');
 
   const isDark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+  useEffect(() => {
+    if (tripList !== null) { setTrips(tripList); return; }
+    loadTrips(user.id).then(setTrips).catch(() => {});
+  }, [tripList]);
 
   useEffect(() => {
     getProfile(user.id).then(profile => {
@@ -113,6 +120,8 @@ export default function Profile() {
         home_country: newHome?.name || null,
         countries_visited: newVisited.map(c => c.name),
       });
+      // Refresh AuthContext so the globe + dashboard update immediately
+      await refreshProfile(user.id);
     } catch (e) { console.error(e); }
     finally { setSavingCountries(false); }
   };
@@ -157,10 +166,14 @@ export default function Profile() {
     ...countriesVisited.map(c => c.name),
   ];
 
-  const totalVisited = new Set([
+  // Combine all sources: profile countries + past trip countries
+  const tripStats = getPassportStats(trips);
+  const allVisitedNames = new Set([
     ...(homeCountry ? [homeCountry.name] : []),
     ...countriesVisited.map(c => c.name),
-  ]).size;
+    ...tripStats.countries,
+  ]);
+  const totalVisited = allVisitedNames.size;
   const worldPct = Math.round((totalVisited / TOTAL_COUNTRIES) * 100);
 
   return (
@@ -199,16 +212,30 @@ export default function Profile() {
 
         {error && <div style={{ fontSize: 12, color: '#E63946', fontFamily: f, textAlign: 'center', marginBottom: 12 }}>{error}</div>}
 
-        {/* World % stat */}
-        {totalVisited > 0 && (
-          <div style={{ background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', padding: '16px', marginBottom: 12, textAlign: 'center' }}>
+        {/* Travel stats */}
+        <div style={{ background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', padding: '16px', marginBottom: 12 }}>
+          {/* World % */}
+          <div style={{ textAlign: 'center', marginBottom: 12 }}>
             <div style={{ fontSize: 36, fontWeight: 800, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.03em', lineHeight: 1 }}>{worldPct}%</div>
             <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: f, marginTop: 4 }}>of the world explored · {totalVisited} of {TOTAL_COUNTRIES} countries</div>
             <div style={{ marginTop: 10, height: 5, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
               <div style={{ width: `${worldPct}%`, height: '100%', background: 'linear-gradient(90deg, #1a6aaa, #2e86de)', borderRadius: 3, transition: 'width .4s ease' }} />
             </div>
           </div>
-        )}
+          {/* Stat row */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 14 }}>
+            {[
+              { label: 'Trips', value: tripStats.trips },
+              { label: 'Countries', value: totalVisited },
+              { label: 'Cities', value: tripStats.uniqueCities },
+            ].map(({ label, value }) => (
+              <div key={label} style={{ textAlign: 'center', padding: '10px 0', background: 'var(--border)', borderRadius: 10 }}>
+                <div style={{ fontSize: 20, fontWeight: 800, fontFamily: pf, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{value}</div>
+                <div style={{ fontSize: 10.5, color: 'var(--text-secondary)', fontFamily: f, marginTop: 2, textTransform: 'uppercase', letterSpacing: '.05em' }}>{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
 
         {/* Display name */}
         <div style={{ background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', padding: '16px', marginBottom: 12 }}>
