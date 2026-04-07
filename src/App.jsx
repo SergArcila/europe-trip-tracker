@@ -14,6 +14,8 @@ import Signup from './pages/Signup';
 import ShareView from './pages/ShareView';
 import PublicProfile from './pages/PublicProfile';
 import Feed from './pages/Feed';
+import Planning from './pages/Planning';
+import PlanEditor from './pages/PlanEditor';
 
 // Fires prefetchAll in the background whenever a user session starts.
 // Runs inside both providers so it can access both contexts.
@@ -96,6 +98,8 @@ export default function App() {
             <Route path="/trips/:id/cities/:cityId" element={<AuthGuard><CityDetail /></AuthGuard>} />
             <Route path="/profile" element={<AuthGuard><Profile /></AuthGuard>} />
             <Route path="/feed" element={<AuthGuard><Feed /></AuthGuard>} />
+            <Route path="/planning" element={<AuthGuard><Planning /></AuthGuard>} />
+            <Route path="/planning/:id" element={<AuthGuard><PlanEditor /></AuthGuard>} />
 
             {/* Catch-all */}
             <Route path="*" element={<Navigate to="/" replace />} />

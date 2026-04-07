@@ -51,7 +51,7 @@ function getCountryFill(isoId, countryData) {
   return '#0f84d4';                  // complete — fully lit
 }
 
-export default function RouteMap({ trip }) {
+export default function RouteMap({ trip, height = 300, showCityList = true, showLabels = false }) {
   const cities = trip.cities.filter(c => c.lat && c.lng);
   const [hovered, setHovered] = useState(null);
 
@@ -182,7 +182,7 @@ export default function RouteMap({ trip }) {
         <ComposableMap
           projection="geoOrthographic"
           projectionConfig={{ rotate: rotation, scale }}
-          style={{ width: '100%', height: 360 }}
+          style={{ width: '100%', height }}
         >
           <defs>
             <filter id="glow" x="-80%" y="-80%" width="260%" height="260%">
@@ -229,23 +229,44 @@ export default function RouteMap({ trip }) {
             }
           </Geographies>
 
-          {cities.map(city => (
-            <Marker
-              key={city.id}
-              coordinates={[city.lng, city.lat]}
-              onMouseEnter={() => setHovered(city.id)}
-              onMouseLeave={() => setHovered(null)}
-            >
-              <circle r={hovered === city.id ? 16 : 11} fill={city.color + '1a'} style={{ transition: 'r .2s' }} />
-              <circle r={hovered === city.id ? 9 : 6} fill={city.color + '55'} style={{ transition: 'r .2s' }} />
-              <circle r={hovered === city.id ? 5.5 : 3.5} fill={city.color} filter="url(#glow)" style={{ transition: 'r .2s' }} />
-              {hovered === city.id && (
-                <text y={-18} textAnchor="middle" style={{ fontSize: 11, fontFamily: '-apple-system, system-ui, sans-serif', fontWeight: 700, fill: '#fff', pointerEvents: 'none', letterSpacing: '0.02em' }}>
-                  {city.name}
-                </text>
-              )}
-            </Marker>
-          ))}
+          {cities.map(city => {
+            const isHovered = hovered === city.id;
+            return (
+              <Marker
+                key={city.id}
+                coordinates={[city.lng, city.lat]}
+                onMouseEnter={() => setHovered(city.id)}
+                onMouseLeave={() => setHovered(null)}
+              >
+                {/* Outer glow ring */}
+                <circle r={isHovered ? 16 : 11} fill={city.color + '1a'} style={{ transition: 'r .2s' }} />
+                <circle r={isHovered ? 9 : 6} fill={city.color + '55'} style={{ transition: 'r .2s' }} />
+                <circle r={isHovered ? 5.5 : 3.5} fill={city.color} filter="url(#glow)" style={{ transition: 'r .2s' }} />
+                {/* Label — always visible when showLabels, otherwise on hover */}
+                {(showLabels || isHovered) && (
+                  <>
+                    {/* Dark pill background for readability */}
+                    <rect
+                      x={-city.name.length * 3.4}
+                      y={-29}
+                      width={city.name.length * 6.8}
+                      height={16}
+                      rx={4}
+                      fill="rgba(4,10,20,0.75)"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                    <text
+                      y={-17}
+                      textAnchor="middle"
+                      style={{ fontSize: 10, fontFamily: '-apple-system, system-ui, sans-serif', fontWeight: 700, fill: '#fff', pointerEvents: 'none', letterSpacing: '0.03em' }}
+                    >
+                      {city.name}
+                    </text>
+                  </>
+                )}
+              </Marker>
+            );
+          })}
         </ComposableMap>
 
         {/* Flag pill */}
@@ -264,53 +285,49 @@ export default function RouteMap({ trip }) {
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, background: 'linear-gradient(to top, #060d1a, transparent)', pointerEvents: 'none' }} />
       </div>
 
-      {/* City list with dates */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
-        {trip.cities.map(city => {
-          const { t, d } = cityCounts(city);
-          const pct = t > 0 ? Math.round((d / t) * 100) : 0;
-          const dateStr = formatDateRange(city.startDate, city.endDate);
-          const isActive = hovered === city.id;
-          return (
-            <div
-              key={city.id}
-              onMouseEnter={() => setHovered(city.id)}
-              onMouseLeave={() => setHovered(null)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 13px',
-                background: isActive ? `${city.color}12` : 'var(--bg-card)',
-                borderRadius: 11,
-                border: `1px solid ${isActive ? city.color + '40' : 'var(--border)'}`,
-                transition: 'all .15s',
-                cursor: 'default',
-              }}
-            >
-              {/* Color dot with glow for visited */}
-              <div style={{
-                width: 9, height: 9, borderRadius: 5,
-                background: city.color, flexShrink: 0,
-                boxShadow: d > 0 ? `0 0 7px ${city.color}` : 'none',
-                opacity: d > 0 ? 1 : 0.5,
-              }} />
-              <span style={{ fontSize: 16, flexShrink: 0 }}>{city.flag || '📍'}</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f }}>{city.name}</div>
-                {dateStr && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 1 }}>{dateStr}</div>}
-              </div>
-              {t > 0 && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                  <div style={{ width: 40, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: city.color, borderRadius: 2, boxShadow: pct > 0 ? `0 0 4px ${city.color}` : 'none' }} />
-                  </div>
-                  <span style={{ fontSize: 11, color: pct > 0 ? city.color : 'var(--text-secondary)', fontFamily: f, fontWeight: 600, minWidth: 26, textAlign: 'right' }}>{pct}%</span>
+      {/* City list with dates — only shown when requested */}
+      {showCityList && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 10 }}>
+          {trip.cities.map(city => {
+            const { t, d } = cityCounts(city);
+            const pct = t > 0 ? Math.round((d / t) * 100) : 0;
+            const dateStr = formatDateRange(city.startDate, city.endDate);
+            const isActive = hovered === city.id;
+            return (
+              <div
+                key={city.id}
+                onMouseEnter={() => setHovered(city.id)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 13px',
+                  background: isActive ? `${city.color}12` : 'var(--bg-card)',
+                  borderRadius: 11,
+                  border: `1px solid ${isActive ? city.color + '40' : 'var(--border)'}`,
+                  transition: 'all .15s',
+                  cursor: 'default',
+                }}
+              >
+                <div style={{ width: 9, height: 9, borderRadius: 5, background: city.color, flexShrink: 0, boxShadow: d > 0 ? `0 0 7px ${city.color}` : 'none', opacity: d > 0 ? 1 : 0.5 }} />
+                <span style={{ fontSize: 16, flexShrink: 0 }}>{city.flag || '📍'}</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f }}>{city.name}</div>
+                  {dateStr && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 1 }}>{dateStr}</div>}
                 </div>
-              )}
-              <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f, flexShrink: 0 }}>{city.country}</span>
-            </div>
-          );
-        })}
-      </div>
+                {t > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    <div style={{ width: 40, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${pct}%`, height: '100%', background: city.color, borderRadius: 2 }} />
+                    </div>
+                    <span style={{ fontSize: 11, color: pct > 0 ? city.color : 'var(--text-secondary)', fontFamily: f, fontWeight: 600, minWidth: 26, textAlign: 'right' }}>{pct}%</span>
+                  </div>
+                )}
+                <span style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f, flexShrink: 0 }}>{city.country}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

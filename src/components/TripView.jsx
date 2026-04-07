@@ -193,8 +193,11 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
   const { t: gT, d: gD, pct: gP } = tripProgress(trip);
   const days = tripDays(trip);
   const dateStr = formatDateRange(trip.startDate, trip.endDate);
+  const hasGlobe = trip.cities.some(c => c.lat && c.lng);
+  const gradientColors = trip.cities.map(c => c.color).join(',');
+  const progressBg = trip.cities.length > 1 ? `linear-gradient(90deg,${gradientColors})` : (trip.cities[0]?.color || '#457B9D');
 
-  // Unique countries with one flag each
+  // Unique countries
   const countryMap = new Map();
   for (const c of trip.cities) {
     const key = c.country || c.name;
@@ -202,101 +205,117 @@ export default function TripView({ trip, updateTrip, onSelectCity }) {
   }
   const uniqueCountries = [...countryMap.entries()];
 
-  const gradientColors = trip.cities.map(c => c.color).join(',');
-
   return (
-    <div style={{ maxWidth: 600, margin: '0 auto', padding: '0 16px 40px' }}>
-      {/* Hero */}
-      <div style={{ textAlign: 'center', padding: '26px 0 8px' }}>
-        <div style={{ fontSize: 40, marginBottom: 5 }}>{trip.coverEmoji || '✈️'}</div>
-        <h1 style={{ fontSize: 22, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 6px', letterSpacing: '-0.02em' }}>{trip.name}</h1>
-        {/* Country flags row */}
+    <div style={{ maxWidth: 600, margin: '0 auto', paddingBottom: 48 }}>
+
+      {/* ── Trip hero (title + flags + meta) ── */}
+      <div style={{ textAlign: 'center', padding: '26px 16px 8px' }}>
+        <div style={{ fontSize: 40, marginBottom: 6 }}>{trip.coverEmoji || '✈️'}</div>
+        <h1 style={{ fontSize: 24, fontWeight: 700, fontFamily: pf, color: 'var(--text-primary)', margin: '0 0 8px', letterSpacing: '-0.02em' }}>{trip.name}</h1>
         {uniqueCountries.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginBottom: 6 }}>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginBottom: 8 }}>
             {uniqueCountries.map(([country, flag]) => (
               <span key={country} title={country} style={{ fontSize: 20 }}>{flag}</span>
             ))}
           </div>
         )}
         <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', fontFamily: f }}>
-          {dateStr}
-          {days > 0 ? ` · ${days} days` : ''}
+          {dateStr}{days > 0 ? ` · ${days} days` : ''}
           {uniqueCountries.length > 0 ? ` · ${uniqueCountries.length} ${uniqueCountries.length === 1 ? 'country' : 'countries'}` : ''}
           {trip.cities.length > 0 ? ` · ${trip.cities.length} ${trip.cities.length === 1 ? 'city' : 'cities'}` : ''}
           {gT > 0 ? ` · ${gT} items` : ''}
         </div>
       </div>
 
-      {/* Progress bar */}
-      <div style={{ background: 'var(--bg-card)', borderRadius: 13, padding: '14px 16px', margin: '14px 0 16px', border: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <span style={{ fontSize: 12.5, fontFamily: f, color: 'var(--text-secondary)' }}>Trip Progress</span>
-          <span style={{ fontSize: 20, fontWeight: 700, fontFamily: f, color: 'var(--text-primary)' }}>{gP}%</span>
-        </div>
-        <div style={{ width: '100%', height: 7, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{ width: `${gP}%`, height: '100%', background: trip.cities.length > 1 ? `linear-gradient(90deg,${gradientColors})` : (trip.cities[0]?.color || '#457B9D'), borderRadius: 4, transition: 'width .4s ease' }} />
-        </div>
-        <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6, fontFamily: f }}>{gD} of {gT} items</div>
-      </div>
-
-      {/* Globe Map */}
-      {trip.cities.some(c => c.lat && c.lng) && (
-        <div style={{ marginBottom: 16 }}>
-          <RouteMap trip={trip} />
+      {/* ── Progress bar card ── */}
+      {gT > 0 && (
+        <div style={{ background: 'var(--bg-card)', borderRadius: 13, padding: '14px 16px', margin: '12px 16px 16px', border: '1px solid var(--border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 12.5, fontFamily: f, color: 'var(--text-secondary)' }}>Trip Progress</span>
+            <span style={{ fontSize: 20, fontWeight: 700, fontFamily: f, color: 'var(--text-primary)' }}>{gP}%</span>
+          </div>
+          <div style={{ width: '100%', height: 7, background: 'var(--border)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ width: `${gP}%`, height: '100%', background: progressBg, borderRadius: 4, transition: 'width .4s ease' }} />
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', marginTop: 6, fontFamily: f }}>{gD} of {gT} items</div>
         </div>
       )}
 
-      {/* Cities */}
-      {trip.cities.map(city => {
-        const { t, d } = cityCounts(city);
-        const p = pct(d, t);
-        const dateRange = formatDateRange(city.startDate, city.endDate);
-        const cityNotes = getCity(city.id)?.notes;
-        return (
-          <button key={city.id} onClick={() => onSelectCity(city.id)}
-            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--bg-card)', borderRadius: 13, border: '1px solid var(--border)', width: '100%', cursor: 'pointer', marginBottom: 8, textAlign: 'left', transition: 'all .15s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = city.color; e.currentTarget.style.transform = 'translateY(-1px)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.transform = 'none'; }}>
-            <div style={{ width: 42, height: 42, borderRadius: 11, background: `${city.color}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 21, flexShrink: 0 }}>{city.flag || '📍'}</div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f }}>{city.name}</div>
-              <div style={{ fontSize: 11.5, color: 'var(--text-secondary)', fontFamily: f }}>{dateRange || city.country}</div>
-              {cityNotes && <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', opacity: 0.75 }}>{cityNotes.length > 72 ? cityNotes.slice(0, 72) + '…' : cityNotes}</div>}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: city.color, fontFamily: f }}>{p}%</span>
-              <div style={{ width: 44, height: 4, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ width: `${p}%`, height: '100%', background: city.color, borderRadius: 2, transition: 'width .35s ease' }} />
-              </div>
-            </div>
-            <ChevRight />
-          </button>
-        );
-      })}
-
-      {trip.cities.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '30px 20px', color: 'var(--text-secondary)', fontSize: 13, fontFamily: f }}>
-          No cities yet. Edit the trip to add cities.
+      {/* ── Globe — zoomed to trip cities with labels ── */}
+      {hasGlobe && (
+        <div style={{ margin: '0 16px 16px' }}>
+          <RouteMap trip={trip} height={280} showCityList={false} showLabels={true} />
         </div>
       )}
 
-      {/* Full Schedule */}
-      <TripSchedule trip={trip} onExportICS={(cities) => downloadICS(trip, cities)} />
-
-      {/* Bookings & Transport */}
-      <Bookings trip={trip} updateTrip={updateTrip} />
-
-      {/* Stats */}
-      <div style={{ marginTop: 24, marginBottom: 8 }}>
-        <div style={{ fontSize: 14, fontWeight: 600, fontFamily: f, color: 'var(--text-primary)', marginBottom: 10 }}>📊 Trip Stats</div>
-        <TripStats trip={trip} />
+      {/* ── Cities ── compact tappable list */}
+      <div style={{ padding: '14px 16px 0', marginTop: gT === 0 ? 8 : 0 }}>
+        {trip.cities.length === 0 && (
+          <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 13, fontFamily: f }}>
+            No cities yet — edit the trip to add some.
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {trip.cities.map((city, idx) => {
+            const { t, d } = cityCounts(city);
+            const p = pct(d, t);
+            const dateRange = formatDateRange(city.startDate, city.endDate);
+            const cityNotes = getCity(city.id)?.notes;
+            return (
+              <button
+                key={city.id}
+                onClick={() => onSelectCity(city.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)', width: '100%', cursor: 'pointer', textAlign: 'left', transition: 'all .15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = city.color + '80'; e.currentTarget.style.background = city.color + '08'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-card)'; }}
+              >
+                {/* Colored left accent */}
+                <div style={{ width: 3, height: 34, borderRadius: 2, background: city.color, flexShrink: 0 }} />
+                {/* Flag */}
+                <span style={{ fontSize: 19, flexShrink: 0 }}>{city.flag || '📍'}</span>
+                {/* Name + date */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text-primary)', fontFamily: f }}>{city.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontFamily: f, marginTop: 1 }}>
+                    {dateRange || city.country}
+                    {cityNotes && <span style={{ opacity: 0.6 }}> · {cityNotes.slice(0, 40)}{cityNotes.length > 40 ? '…' : ''}</span>}
+                  </div>
+                </div>
+                {/* Progress */}
+                {t > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 }}>
+                    <span style={{ fontSize: 11.5, fontWeight: 700, color: p > 0 ? city.color : 'var(--text-secondary)', fontFamily: f }}>{p}%</span>
+                    <div style={{ width: 36, height: 3, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+                      <div style={{ width: `${p}%`, height: '100%', background: city.color, borderRadius: 2 }} />
+                    </div>
+                  </div>
+                )}
+                <ChevRight />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Trip Journal */}
-      <TripJournal trip={trip} updateTrip={updateTrip} />
+      {/* ── Sections ── */}
+      <div style={{ padding: '0 16px' }}>
+        {/* Full Schedule */}
+        <TripSchedule trip={trip} onExportICS={(cities) => downloadICS(trip, cities)} />
 
-      {/* Members (owner + collaborators) */}
-      <TripMembers trip={trip} />
+        {/* Bookings & Transport */}
+        <Bookings trip={trip} updateTrip={updateTrip} />
+
+        {/* Stats */}
+        <div style={{ marginTop: 20 }}>
+          <TripStats trip={trip} />
+        </div>
+
+        {/* Trip Journal */}
+        <TripJournal trip={trip} updateTrip={updateTrip} />
+
+        {/* Members */}
+        <TripMembers trip={trip} />
+      </div>
     </div>
   );
 }

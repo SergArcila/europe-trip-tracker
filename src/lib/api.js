@@ -1258,3 +1258,57 @@ export async function getFeed({ limit = 20, before = null } = {}) {
   if (error) throw error;
   return data || [];
 }
+
+// ─────────────────────────────────────────────────────────────
+// Trip Planning Canvas
+// ─────────────────────────────────────────────────────────────
+
+export async function getMyPlans() {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .select('id, title, emoji, created_at, updated_at')
+    .eq('user_id', user.id)
+    .order('updated_at', { ascending: false });
+  if (error) throw error;
+  return data || [];
+}
+
+export async function getPlan(planId) {
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .select('*')
+    .eq('id', planId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function createPlan(title = 'Untitled Plan', emoji = '🗺️') {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('Not authenticated');
+  const { data, error } = await supabase
+    .from('trip_plans')
+    .insert({ user_id: user.id, title, emoji, blocks: [] })
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data.id;
+}
+
+export async function savePlan(planId, { title, emoji, blocks }) {
+  const { error } = await supabase
+    .from('trip_plans')
+    .update({ title, emoji, blocks })
+    .eq('id', planId);
+  if (error) throw error;
+}
+
+export async function deletePlan(planId) {
+  const { error } = await supabase
+    .from('trip_plans')
+    .delete()
+    .eq('id', planId);
+  if (error) throw error;
+}
